@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Run npm run build and host the dist directory over HTTPS for browser access.
+Run npm run build and host the dist directory over HTTPS for browser access. Serve all generated HTML files. Sign-in, owner, staff, customers, pledges, releases, audit, accounting, and reports each have their own page and URL.
 
 ## Provision Supabase
 
@@ -39,5 +39,7 @@ Install Android Studio with SDK 35 and use JDK 21. From the project root run npm
 ## Release and accounts
 
 Interest uses simple monthly interest. A partial calendar month rounds up, same-day release defaults to zero months, and a month-end anniversary uses the last valid day of that month. The database saves original and applied months and rates. Submitting an audit review removes the release from the pending queue while preserving the review timestamp and reviewer.
+
+Supabase filters customer and open-loan searches, customer history, pending release reviews, and date-based reports. Release quotes and accounting totals are calculated in the database. Transaction tables load 50 rows at a time.
 
 The accounting screens use INR and a fixed chart of accounts. Pledges and releases generate ledger entries. Post opening capital and balances, other income and expenses through Accounting. Profit and loss uses realized interest. Balance sheet and trial balance are cumulative through the report date.
