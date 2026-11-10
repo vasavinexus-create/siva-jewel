@@ -24,13 +24,13 @@ supabase db push
 supabase functions deploy create-staff --project-ref pwuukmjlojxcfbgryolm
 ```
 
-Create the initial platform owner in Supabase Authentication, then use the SQL Editor with that user's UUID:
+In Supabase Authentication, create and confirm the initial platform owner with the internal email `vasavinexus@sivajewel.example.com` and set its password there. Then use the SQL Editor with that user's UUID:
 
 ```sql
 insert into public.owners (user_id) values ('REPLACE_WITH_AUTH_USER_UUID');
 ```
 
-Sign in as the owner, create a shop, select it and create its shop administrator. The administrator can create staff and configure page access. Pausing a shop blocks shop data access at the database and storage layers. The initial credentials for shop staff are set by the administrator.
+Sign in with username `vasavinexus` and the password set in Supabase, create a shop, select it and create its shop administrator. The administrator can create staff and configure page access. Pausing a shop blocks shop data access at the database and storage layers. All accounts sign in with usernames and passwords. Usernames are case-insensitive and unique across shops. Supabase Auth stores them internally as `username@sivajewel.example.com`. These addresses are placeholders, so email-based password recovery is unavailable. Set initial staff credentials from the staff page.
 
 ## Build Android
 

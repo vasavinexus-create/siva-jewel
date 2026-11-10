@@ -1,3 +1,4 @@
+import { loginEmail, loginDomain, usernamePattern } from './supabase/functions/_shared/login.js';
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
 import { Capacitor } from '@capacitor/core';
@@ -11,6 +12,7 @@ const labels = {customers:'Customers',loans:'Pledge loan',release:'Release',repo
 const permissions = Object.keys(labels).filter(page => page !== 'admin');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field = (name, label, attributes = 'required') => '<label>'+label+'<input name="'+name+'" '+attributes+'></label>';
+const usernameField = label => field('username',label,'required pattern="'+usernamePattern+'" autocomplete="username" autocapitalize="none" spellcheck="false" title="3 to 32 letters, digits, underscores or hyphens"');
 const photo = (name, label) => field(name,label,'type="file" accept="image/jpeg,image/png,image/webp" capture="environment"') +
   (Capacitor.isNativePlatform() ? '<button type="button" data-camera="'+name+'">Take '+label.toLowerCase()+'</button>' : '');
 const option = (value, label) => '<option value="'+escape(value)+'">'+escape(label)+'</option>';
@@ -95,8 +97,10 @@ async function render(pages = [...(owner?['owner']:[]),...Object.keys(labels).fi
     '</header>'+(page==='login'?'':'<nav>'+pages.map(p=>'<button data-page="'+p+'" '+(page===p?'aria-current="page"':'')+'>'+ (labels[p] || 'Platform owner')+'</button>').join('')+'</nav>')+
     '<main><h1>'+escape(labels[page] || {login:'Sign in',owner:'Platform owner',unassigned:'Shop access'}[page])+'</h1><p id="message" role="status"></p></main>';
   if(page==='login'){
-    form(field('email','Email','type="email" required')+field('password','Password','type="password" required'),'Sign in',async data=>{
-      await result(db.auth.signInWithPassword(data)); await start();
+    form(usernameField('Username')+field('password','Password','type="password" required autocomplete="current-password"'),'Sign in',async data=>{
+      const email=loginEmail(data.username);
+      if(!email) throw new Error('Enter a valid username.');
+      await result(db.auth.signInWithPassword({email,password:data.password})); await start();
     },false);
     return;
   }
@@ -115,17 +119,17 @@ const screens = {
         await result(db.from('shops').update({paused:!item.paused}).eq('id',item.id)); await start();
       },false);
     }
-    if(shop) form(field('email','Shop admin email','type="email" required')+field('password','Temporary password','type="password" minlength="12" required'),
+    if(shop) form(usernameField('Shop administrator username')+field('password','Temporary password','type="password" minlength="12" required'),
       'Create shop admin',data=>result(db.functions.invoke('create-staff',{body:{...data,shop,admin:true}})));
   },
   async admin(){
     const staff=await rows('staff','user_id');
     const checks = selected => permissions.map(p=>'<label><span><input name="'+p+'" type="checkbox" '+(selected.includes(p)?'checked':'')+'> '+escape(labels[p]||'Shop sign-in')+'</span></label>').join('');
     const selected = data => permissions.filter(p=>data[p]);
-    form(field('email','Staff email','type="email" required')+field('password','Temporary password','type="password" minlength="12" required')+checks([]),
-      'Create staff',data=>result(db.functions.invoke('create-staff',{body:{email:data.email,password:data.password,shop,pages:selected(data)}})));
+    form(usernameField('Staff username')+field('password','Temporary password','type="password" minlength="12" required')+checks([]),
+      'Create staff',data=>result(db.functions.invoke('create-staff',{body:{username:data.username,password:data.password,shop,pages:selected(data)}})));
     for(const member of staff.filter(m=>!m.pages.includes('admin'))){
-      form('<strong>'+escape(member.email || member.user_id)+'</strong>'+checks(member.pages),'Save access',data=>result(db.from('staff').update({pages:selected(data)}).eq('shop_id',shop).eq('user_id',member.user_id)));
+      form('<strong>'+escape(member.email?.replace('@'+loginDomain,'') || member.user_id)+'</strong>'+checks(member.pages),'Save access',data=>result(db.from('staff').update({pages:selected(data)}).eq('shop_id',shop).eq('user_id',member.user_id)));
     }
   },
   async customers(){

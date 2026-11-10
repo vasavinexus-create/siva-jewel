@@ -1,3 +1,4 @@
+import { loginEmail } from '../_shared/login.js';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const headers = {
@@ -22,8 +23,9 @@ Deno.serve(async req => {
     });
     const { data: identity, error: identityError } = await caller.auth.getUser(auth.slice(7));
     if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
-    const { shop, email, password, admin = false, pages = [] } = await req.json();
-    if (typeof shop !== 'string' || typeof email !== 'string' || typeof password !== 'string' || password.length < 12 ||
+    const { shop, username, password, admin = false, pages = [] } = await req.json();
+    const email = loginEmail(username);
+    if (typeof shop !== 'string' || !email || typeof password !== 'string' || password.length < 12 ||
         typeof admin !== 'boolean' || !Array.isArray(pages) || pages.some(p => !allowedPages.includes(p))) {
       return reply(400, { error: 'Invalid staff details' });
     }
