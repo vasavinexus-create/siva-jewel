@@ -1,0 +1,25 @@
+{
+  "name": "siva-jewel",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --base=./",
+    "android": "npm run build && cap sync android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/camera": "^7.0.5",
+    "@capacitor/core": "^7.6.9",
+    "@supabase/supabase-js": "^2.117.0"
+  },
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
+    "vite": "^6.4.6"
+  }
+}

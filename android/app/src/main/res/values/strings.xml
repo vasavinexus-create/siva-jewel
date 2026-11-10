@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Siva Jewel</string>
+    <string name="title_activity_main">Siva Jewel</string>
+    <string name="package_name">in.sivajewel.pawnledger</string>
+    <string name="custom_url_scheme">in.sivajewel.pawnledger</string>
+</resources>

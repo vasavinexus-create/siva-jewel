@@ -1,0 +1,50 @@
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json',
+};
+const reply = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers });
+const allowedPages = ['shop', 'customers', 'loans', 'release', 'reports', 'accounting', 'audit'];
+
+Deno.serve(async req => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers });
+  if (req.method !== 'POST') return reply(405, { error: 'POST required' });
+  try {
+    const auth = req.headers.get('Authorization');
+    if (!auth?.startsWith('Bearer ')) return reply(401, { error: 'Sign in required' });
+    const url = Deno.env.get('SUPABASE_URL')!;
+    const caller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false },
+    });
+    const { data: identity, error: identityError } = await caller.auth.getUser(auth.slice(7));
+    if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
+    const { shop, email, password, admin = false, pages = [] } = await req.json();
+    if (typeof shop !== 'string' || typeof email !== 'string' || typeof password !== 'string' || password.length < 12 ||
+        typeof admin !== 'boolean' || !Array.isArray(pages) || pages.some(p => !allowedPages.includes(p))) {
+      return reply(400, { error: 'Invalid staff details' });
+    }
+    const permitted = admin ? await caller.rpc('is_owner') : await caller.rpc('can_access', { s: shop, p: 'admin' });
+    if (permitted.error || !permitted.data) return reply(403, { error: 'Shop access denied' });
+
+    const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+    const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true });
+    if (error || !data.user) return reply(400, { error: error?.message || 'User creation failed' });
+    const membership = await caller.from('staff').insert({
+      shop_id: shop, user_id: data.user.id, email: data.user.email,
+      pages: admin ? ['admin'] : [...new Set(['shop', ...pages])],
+    });
+    if (membership.error) {
+      const cleanup = await service.auth.admin.deleteUser(data.user.id);
+      if (cleanup.error) console.error('Auth cleanup failed', data.user.id, cleanup.error.message);
+      return reply(400, { error: 'Shop membership could not be saved' });
+    }
+    return reply(201, { id: data.user.id });
+  } catch (error) {
+    console.error(error);
+    return reply(400, { error: 'Unable to create staff account' });
+  }
+});
