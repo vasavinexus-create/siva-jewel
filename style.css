@@ -57,7 +57,8 @@ button, a, input, select { touch-action: manipulation; }
   font-weight: 800;
   letter-spacing: .04em;
 }
-.brand-name { font-weight: 730; line-height: 1.2; }
+.brand-logo { flex: none; object-fit: contain; background: #fff; }
+.brand-name { font-weight: 730; line-height: 1.2; overflow-wrap: anywhere; }
 .brand-name small { display: block; margin-top: .2rem; color: #cfdbd2; font-size: .75rem; font-weight: 500; }
 #logout { flex: none; margin-inline-start: auto; background: transparent; color: #fff; border-color: #7c8d82; }
 #logout:hover { background: #2d4236; }
@@ -272,5 +273,5 @@ img { max-width: min(100%, 16rem); max-height: 15rem; border-radius: .65rem; obj
 @media (max-width: 360px) {
   .app-header { gap: .4rem; }
   .app-header .brand { gap: .4rem; }
-  .app-header .brand-mark { display: none; }
+  .app-header .brand-mark:not(.brand-logo) { display: none; }
 }

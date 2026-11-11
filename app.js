@@ -319,12 +319,18 @@ async function mount(page, screen) {
         return navigate(permitted[0]||'unassigned');
       }
     }
+    const activeShop=shops.find(item=>item.id===shop);
+    const branding=activeShop?await result(db.from('shops').select('logo').eq('id',activeShop.id).maybeSingle()):null;
+    const brandName=activeShop?.name || 'Siva Jewel';
+    const brandMark=branding?.logo
+      ? '<img class="brand-mark brand-logo" src="'+escape(branding.logo)+'" alt="">'
+      : '<span class="brand-mark" aria-hidden="true">'+escape(brandName.trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase())+'</span>';
     const links=permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('');
     root.className=page==='login'?'auth-layout':'workspace-layout';
     root.innerHTML='<a class="skip-link" href="#main-content">Skip to content</a>'+
       '<header class="app-header">'+(links?'<details class="top-menu"><summary>Menu</summary><nav aria-label="Page menu">'+links+'</nav></details>':'')+
-      '<div class="brand"><span class="brand-mark" aria-hidden="true">SJ</span>'+
-      '<span class="brand-name">Siva Jewel<small>Pawn Ledger</small></span></div>'+
+      '<div class="brand">'+brandMark+
+      '<span class="brand-name">'+escape(brandName)+'<small>Pawn Ledger</small></span></div>'+
       (session?'<button id="logout" type="button">Sign out</button>':'')+'</header>'+
       '<main id="main-content" tabindex="-1"><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>'+
       (links?'<div class="bottom-bar"><button type="button" data-scroll="-1" aria-label="Scroll menu left">‹</button>'+

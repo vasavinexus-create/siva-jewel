@@ -2,6 +2,25 @@ import { mount,db,shop,field,usernameField,form,result,escape,section,cursorList
 
 const adminFields=()=>usernameField('Shop administrator username')+
   field('password','Shop administrator password','type="password" minlength="6" autocomplete="new-password" required');
+const logoField=()=>field('logo','Shop logo (optional)','type="file" accept="image/png,image/jpeg,image/webp"');
+
+async function prepareLogo(file){
+  if(!file?.size) return null;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size>5*1024*1024){
+    throw new Error('Choose a PNG, JPEG, or WebP logo up to 5 MB.');
+  }
+  const image=await createImageBitmap(file).catch(()=>{throw new Error('Could not read the logo image.');});
+  try {
+    const scale=Math.min(1,128/Math.max(image.width,image.height));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(image.width*scale));
+    canvas.height=Math.max(1,Math.round(image.height*scale));
+    canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+    return canvas.toDataURL('image/png');
+  } finally {
+    image.close();
+  }
+}
 
 async function createAdministrator(details){
   const {data,error}=await db.functions.invoke('create-staff',{body:{...details,admin:true}});
@@ -11,8 +30,8 @@ async function createAdministrator(details){
 }
 
 mount('owner',async()=>{
-  form(field('shopName','Shop name')+adminFields(),'Create shop',async data=>{
-    const added=await createAdministrator(data);
+  form(field('shopName','Shop name')+logoField()+adminFields(),'Create shop',async ({logo,...data})=>{
+    const added=await createAdministrator({...data,logo:await prepareLogo(logo)});
     selectShop(added.shopId);
   },false);
   if(shop) form(adminFields(),'Create shop admin for selected shop',data=>createAdministrator({...data,shop}));
@@ -29,10 +48,11 @@ mount('owner',async()=>{
       select.onclick=()=>selectShop(item.id);
       const edit=document.createElement('details');
       edit.innerHTML='<summary>Edit shop</summary>';
-      form(field('name','Shop name','required value="'+escape(item.name)+'"'),'Save shop name',async ({name})=>{
+      form(field('name','Shop name','required value="'+escape(item.name)+'"')+logoField(),'Save shop',async ({name,logo})=>{
         const trimmed=name.trim();
         if(!trimmed) throw new Error('Enter a shop name.');
-        await result(db.from('shops').update({name:trimmed}).eq('id',item.id).select('id').single());
+        const image=await prepareLogo(logo);
+        await result(db.from('shops').update({name:trimmed,...(image?{logo:image}:{})}).eq('id',item.id).select('id').single());
       },true,edit);
       editor.after(edit);
     }
