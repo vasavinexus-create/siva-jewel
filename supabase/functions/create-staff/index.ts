@@ -34,6 +34,9 @@ Deno.serve(async req => {
 
     const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
     const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true });
+    if (error?.code === 'email_exists' || error?.code === 'user_already_exists') {
+      return reply(409, { error: 'This username is already in use. Choose a unique username.' });
+    }
     if (error || !data.user) return reply(400, { error: error?.message || 'User creation failed' });
     const membership = await caller.from('staff').insert({
       shop_id: shop, user_id: data.user.id, email: data.user.email,

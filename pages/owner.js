@@ -6,7 +6,12 @@ mount('owner',async()=>{
     selectShop(added.id);
   },false);
   if(shop) form(usernameField('Shop administrator username')+field('password','Temporary password','type="password" minlength="6" required'),
-    'Create shop admin for selected shop',data=>result(db.functions.invoke('create-staff',{body:{...data,shop,admin:true}})));
+    'Create shop admin for selected shop',async data=>{
+      const {error}=await db.functions.invoke('create-staff',{body:{...data,shop,admin:true}});
+      if(!error) return;
+      const details=await error.context?.json?.().catch(()=>null);
+      throw new Error(details?.error || error.message);
+    });
   section('<div id="shops"></div>');
   await cursorList(document.querySelector('#shops'),cursor=>fetchCursor(db.from('shops').select('id,name,paused'),
     [['name',true],['id',true]],cursor),(shops,container)=>{
