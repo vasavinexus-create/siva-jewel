@@ -16,10 +16,10 @@ mount('customers', async () => {
     const photos=detail.querySelector('[data-photos]');
     await Promise.all([
       showPhoto(photos,customer.photo,'Customer photo'),showPhoto(photos,customer.aadhaar_photo,'Aadhaar photo'),
-      paginated(detail.querySelector('[data-loans]'),['Bill','Pledged','Principal','Released','Interest','Total'],
-        cursor=>fetchCursor(db.from('loans').select('id,bill,loan_date,amount,releases(release_date,interest,total)')
+      paginated(detail.querySelector('[data-loans]'),['Bill','Pledged','Principal','Advance interest','Released','Interest at release','Total at release'],
+        cursor=>fetchCursor(db.from('loans').select('id,bill,loan_date,amount,advance_interest,releases(release_date,interest,total)')
           .eq('shop_id',shop).eq('customer_id',id),[['loan_date',false],['id',true]],cursor),
-        l=>[l.bill,l.loan_date,money(l.amount),l.releases?.release_date,l.releases&&money(l.releases.interest),l.releases&&money(l.releases.total)])
+        l=>[l.bill,l.loan_date,money(l.amount),money(l.advance_interest),l.releases?.release_date,l.releases&&money(l.releases.interest),l.releases&&money(l.releases.total)])
     ]);
   },false);
   history.insertAdjacentHTML('afterend','<section id="history"></section>');

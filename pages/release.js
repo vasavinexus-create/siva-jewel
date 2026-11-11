@@ -37,7 +37,9 @@ mount('release', async () => {
     e.on_date.min=q.loan_date;
     if(defaults){e.billed_months.value=q.months;e.monthly_rate.value=q.rate;}
     target.innerHTML='<h2>'+escape(q.bill)+'</h2><p>'+escape(q.loan_date)+' · '+escape(q.grams)+' g · '+escape(q.notes)+'</p>'+
-      '<div class="metrics"><span>Loan '+money(q.amount)+'</span><span>Interest '+money(q.interest)+'</span><strong>Total '+money(q.total)+'</strong></div>';
+      '<div class="metrics"><span>Principal '+money(q.amount)+'</span><span>Total interest '+money(q.gross_interest)+
+      '</span><span>Interest paid in advance '+money(q.advance_interest)+'</span><span>Interest due '+money(q.interest)+
+      '</span><strong>Total due '+money(q.total)+'</strong></div>';
     ready=true;
     button.disabled=false;
   };
