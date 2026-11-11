@@ -1,4 +1,4 @@
-import { mount,db,shop,escape,field,money,today,result,run,form,section,showPhoto,searchInput } from '../app.js';
+import { mount,db,shop,escape,field,money,today,result,run,form,section,showPhoto,searchInput,submitFinancial } from '../app.js';
 
 mount('release', async () => {
   let version=0;
@@ -7,10 +7,10 @@ mount('release', async () => {
   const editor=form(field('search','Bill, customer name or mobile','type="search"')+'<label>Bill<select name="loan" required></select></label>'+
     field('on_date','Release date','type="date" required value="'+today()+'"')+
     field('billed_months','Months charged','type="number" min="0" step="1" required')+
-    field('monthly_rate','Monthly interest %','type="number" min="0" max="9999.9999" step=".0001" required'),'Record release',async data=>{
+    field('monthly_rate','Monthly interest %','type="number" min="0" max="9999.9999" step=".0001" required'),'Record release',async (data,editor)=>{
     if(!ready) throw new Error('Wait for the current quote.');
     delete data.search;
-    await result(db.rpc('record_release',{...data,billed_months:Number(data.billed_months),monthly_rate:Number(data.monthly_rate)}));
+    await submitFinancial(editor,'release',data);
   });
   section('<div id="quote"></div><div id="jewel"></div>');
   const e=editor.elements;

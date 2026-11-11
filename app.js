@@ -30,7 +30,7 @@ const run = fn => async event => {
   try { document.querySelector('#message').textContent = ''; await fn(event); }
   catch(error) { document.querySelector('#message').textContent = error.message; }
 };
-const form = (html, label, submit, refresh = true) => {
+const form = (html, label, submit, refresh = true, container = document.querySelector('main')) => {
   const target = document.createElement('form');
   target.innerHTML = html+'<button type="submit">'+label+'</button>';
   target.querySelectorAll('[data-camera]').forEach(button=>button.onclick=run(async()=>{
@@ -42,7 +42,7 @@ const form = (html, label, submit, refresh = true) => {
     files.items.add(new File([blob],'capture.jpg',{type:'image/jpeg'}));
     target.elements[button.dataset.camera].files=files.files;
   }));
-  document.querySelector('main').append(target);
+  container.append(target);
   target.onsubmit = run(async event => {
     event.preventDefault();
     const button = target.querySelector('button[type=submit]');
@@ -93,46 +93,68 @@ const searchCustomers = (input,select) => searchInput(input,select,
   term=>result(db.rpc('search_customers',{s:shop,term})),
   c=>c.name+' · '+c.mobile,'Select customer');
 
-function paginated(container, headers, fetchPage, mapRow) {
-  const size=50;
-  let offset=0;
-  const load=async()=>{
-    const items=await fetchPage(offset,offset+size);
-    container.innerHTML=table(headers,items.slice(0,size).map(mapRow))+
-      '<p><button type="button" data-prev>Previous</button> <span>Page '+(offset/size+1)+'</span> <button type="button" data-next>Next</button></p>';
+const pageSize=50;
+
+function fetchCursor(query, columns, cursor) {
+  for(const [name,ascending] of columns) query.order(name,{ascending});
+  if(cursor){
+    const literal=value=>'"'+String(value).replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
+    const predicates=columns.map(([name,ascending],index)=>{
+      const ties=columns.slice(0,index).map(([key])=>key+'.eq.'+literal(cursor[key]));
+      const comparison=name+'.'+(ascending?'gt':'lt')+'.'+literal(cursor[name]);
+      return ties.length?'and('+[...ties,comparison].join(',')+')':comparison;
+    });
+    const [name,ascending]=columns[0];
+    query[ascending?'gte':'lte'](name,cursor[name]).or(predicates.join(','));
+  }
+  return result(query.limit(pageSize+1));
+}
+
+function cursorList(container, fetchPage, renderItems) {
+  const cursors=[null];
+  const load=async index=>{
+    const items=await fetchPage(cursors[index]);
+    const visible=items.slice(0,pageSize);
+    container.replaceChildren();
+    renderItems(visible,container);
+    container.insertAdjacentHTML('beforeend','<p><button type="button" data-prev>Previous</button> <span>Page '+
+      (index+1)+'</span> <button type="button" data-next>Next</button></p>');
     const prev=container.querySelector('[data-prev]');
     const next=container.querySelector('[data-next]');
-    prev.disabled=offset===0;
-    next.disabled=items.length<=size;
-    const move=delta=>run(async()=>{
+    prev.disabled=index===0;
+    next.disabled=items.length<=pageSize;
+    const move=destination=>run(async()=>{
       prev.disabled=true;
       next.disabled=true;
-      const old=offset;
-      offset+=delta;
-      try {await load();}
-      catch(error){offset=old;prev.disabled=offset===0;next.disabled=items.length<=size;throw error;}
+      try {await load(destination);}
+      finally {prev.disabled=index===0;next.disabled=items.length<=pageSize;}
     });
-    prev.onclick=move(-size);
-    next.onclick=move(size);
+    prev.onclick=move(index-1);
+    cursors[index+1]=visible.at(-1);
+    next.onclick=move(index+1);
   };
-  return load();
+  return load(0);
+}
+const paginated=(container,headers,fetchPage,mapRow)=>cursorList(container,fetchPage,(items,target)=>{
+  target.innerHTML=table(headers,items.map(mapRow));
+});
+
+const financialRequests=new WeakMap();
+function submitFinancial(form,operation,payload) {
+  const serialized=JSON.stringify(payload);
+  let request=financialRequests.get(form);
+  if(request?.serialized!==serialized){
+    request={serialized,id:crypto.randomUUID()};
+    financialRequests.set(form,request);
+  }
+  return result(db.rpc('submit_financial',{s:shop,request_id:request.id,operation,payload}));
 }
 
-function pageOffset() {
-  const page=Number(new URLSearchParams(location.search).get('page'));
-  return Number.isSafeInteger(page)&&page>1&&page<100000 ? (page-1)*50 : 0;
-}
-function pageLinks(offset,more) {
-  const page=offset/50+1;
-  if(page===1&&!more) return;
-  section((page>1?'<a href="?page='+(page-1)+'">Previous</a> ':'')+
-    'Page '+page+(more?' <a href="?page='+(page+1)+'">Next</a>':''));
-}
-
-export {mount,db,shop,shops,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,navigate,searchCustomers,searchInput,paginated,pageOffset,pageLinks};
+export {mount,db,shop,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,navigate,searchCustomers,searchInput,paginated,cursorList,fetchCursor,selectShop,submitFinancial};
 const pageUrl = page => new URL(page === 'login' ? './index.html' : './'+page+'.html', location.href);
 const navigate = page => location.replace(pageUrl(page));
 const shopKey = 'pawn-active-shop';
+const selectShop=id=>{sessionStorage.setItem(shopKey,id);location.reload();};
 const labelsByPage = {...labels, login:'Sign in', owner:'Platform owner', unassigned:'Shop access'};
 
 async function mount(page, screen) {
@@ -142,13 +164,19 @@ async function mount(page, screen) {
     if(!session && page!=='login') return navigate('login');
     let permitted=[];
     if(session){
-      const [owner, visibleShops, memberships]=await Promise.all([
+      const [owner,memberships]=await Promise.all([
         result(db.rpc('is_owner')),
-        result(db.from('shops').select('id,name,paused').order('name')),
-        result(db.from('staff').select('shop_id,pages').eq('user_id',session.user.id))
+        result(db.from('staff').select('shop_id,pages,shops(id,name,paused)').eq('user_id',session.user.id))
       ]);
-      shops=visibleShops;
-      shop=shops.find(s=>s.id===sessionStorage.getItem(shopKey))?.id || shops[0]?.id;
+      shops=memberships.flatMap(m=>m.shops&&!m.shops.paused?[m.shops]:[]);
+      const selectedId=sessionStorage.getItem(shopKey);
+      if(owner){
+        const query=db.from('shops').select('id,name,paused');
+        const selected=selectedId?await result(query.eq('id',selectedId).maybeSingle()):null;
+        const fallback=selected||shops[0]||await result(db.from('shops').select('id,name,paused').order('name').order('id').limit(1).maybeSingle());
+        if(fallback&&!shops.some(s=>s.id===fallback.id)) shops.unshift(fallback);
+      }
+      shop=shops.find(s=>s.id===selectedId)?.id || shops[0]?.id;
       const allowed=memberships.find(m=>m.shop_id===shop && !shops.find(s=>s.id===shop)?.paused)?.pages || [];
       permitted=[...(owner?['owner']:[]),...Object.keys(labels).filter(p=>allowed.includes('admin')||allowed.includes(p))];
       if(page==='login'||(permitted.length?!permitted.includes(page):page!=='unassigned')) {
@@ -168,7 +196,7 @@ async function mount(page, screen) {
     const selector=document.querySelector('#shop');
     if(selector){
       selector.value=shop;
-      selector.onchange=()=>{sessionStorage.setItem(shopKey,selector.value);location.reload();};
+      selector.onchange=()=>selectShop(selector.value);
     }
     await screen();
   } catch(error) {

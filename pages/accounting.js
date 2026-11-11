@@ -1,4 +1,4 @@
-import { mount,db,shop,field,option,money,today,result,form,section,paginated } from '../app.js';
+import { mount,db,shop,field,option,money,today,form,section,paginated,fetchCursor,submitFinancial } from '../app.js';
 import { accounts } from '../accounting.js';
 
 mount('accounting',async()=>{
@@ -7,10 +7,10 @@ mount('accounting',async()=>{
       field('description','Description')+'<label>Debit<select name="debit" required>'+options+'</select></label>'+
       '<label>Credit<select name="credit" required>'+options+'</select></label>'+
       field('amount','Amount (INR)','type="number" min=".01" step=".01" required'),
-      'Post journal entry',data=>result(db.from('journal').insert({...data,shop_id:shop})));
+      'Post journal entry',(data,editor)=>submitFinancial(editor,'journal',data));
     section('<div id="journal"></div>');
     await paginated(document.querySelector('#journal'),['Date','Description','Debit','Credit','Amount'],
-      (from,to)=>result(db.from('journal').select('entry_date,description,debit,credit,amount')
-        .eq('shop_id',shop).order('entry_date',{ascending:false}).order('id').range(from,to)),
+      cursor=>fetchCursor(db.from('journal').select('id,entry_date,description,debit,credit,amount')
+        .eq('shop_id',shop),[['entry_date',false],['id',true]],cursor),
       j=>[j.entry_date,j.description,j.debit,j.credit,money(j.amount)]);
 });

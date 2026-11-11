@@ -1,4 +1,4 @@
-import { mount,db,shop,escape,field,option,money,today,table,result,form,paginated } from '../app.js';
+import { mount,db,shop,escape,field,option,money,today,table,result,form,paginated,fetchCursor } from '../app.js';
 
 const kinds=['Day book','Pledging','Releases','Profit and loss','Balance sheet','Trial balance','General ledger','Loan balance'];
 const summaries=new Set(['Profit and loss','Balance sheet','Trial balance','Loan balance']);
@@ -27,23 +27,22 @@ mount('reports', async () => {
     if(kind==='Loan balance'){
       output.insertAdjacentHTML('beforebegin','<p>Outstanding principal '+money(summary.principal)+'</p>');
       await paginated(output,['Bill','Date','Principal'],
-        (start,end)=>result(db.rpc('outstanding_loans',{s:shop,to_date:to||null})
-          .order('loan_date').order('id').range(start,end)),
+        cursor=>fetchCursor(db.rpc('outstanding_loans',{s:shop,to_date:to||null}),[['loan_date',true],['id',true]],cursor),
         l=>[l.bill,l.loan_date,money(l.amount)]);
     } else if(kind==='Pledging'){
       await paginated(output,['Date','Bill','Cash out'],
-        (start,end)=>result(dates(db.from('loans').select('loan_date,bill,amount').eq('shop_id',shop),'loan_date')
-          .order('loan_date').order('id').range(start,end)),
+        cursor=>fetchCursor(dates(db.from('loans').select('id,loan_date,bill,amount').eq('shop_id',shop),'loan_date'),
+          [['loan_date',true],['id',true]],cursor),
         l=>[l.loan_date,l.bill,money(l.amount)]);
     } else if(kind==='Releases'){
       await paginated(output,['Date','Bill','Cash in','Interest'],
-        (start,end)=>result(dates(db.from('releases').select('release_date,total,interest,loans(bill)').eq('shop_id',shop),'release_date')
-          .order('release_date').order('loan_id').range(start,end)),
+        cursor=>fetchCursor(dates(db.from('releases').select('loan_id,release_date,total,interest,loans(bill)').eq('shop_id',shop),'release_date'),
+          [['release_date',true],['loan_id',true]],cursor),
         r=>[r.release_date,r.loans?.bill,money(r.total),money(r.interest)]);
     } else {
       await paginated(output,['Date','Entry','Debit','Credit','Amount'],
-        (start,end)=>result(dates(db.from('ledger_entries').select('entry_date,description,debit,credit,amount').eq('shop_id',shop),'entry_date')
-          .order('entry_date').order('id').order('line').range(start,end)),
+        cursor=>fetchCursor(dates(db.from('ledger_entries').select('id,line,entry_date,description,debit,credit,amount').eq('shop_id',shop),'entry_date'),
+          [['entry_date',true],['id',true],['line',true]],cursor),
         e=>[e.entry_date,e.description,e.debit,e.credit,money(e.amount)]);
     }
   },false);

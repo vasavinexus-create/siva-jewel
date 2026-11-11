@@ -1,4 +1,4 @@
-import { mount, db, shop, escape, field, photo, money, result, form, upload, showPhoto, searchCustomers, paginated } from '../app.js';
+import { mount, db, shop, escape, field, photo, money, result, form, upload, showPhoto, searchCustomers, paginated, fetchCursor } from '../app.js';
 
 mount('customers', async () => {
   form(field('name','Name')+field('village','Village','')+field('address','Address','')+field('mobile','Mobile','type="tel" required')+
@@ -18,8 +18,8 @@ mount('customers', async () => {
     await Promise.all([
       showPhoto(photos,customer.photo,'Customer photo'),showPhoto(photos,customer.aadhaar_photo,'Aadhaar photo'),
       paginated(detail.querySelector('[data-loans]'),['Bill','Pledged','Principal','Released','Interest','Total'],
-        (from,to)=>result(db.from('loans').select('bill,loan_date,amount,releases(release_date,interest,total)')
-          .eq('shop_id',shop).eq('customer_id',id).order('loan_date',{ascending:false}).order('id').range(from,to)),
+        cursor=>fetchCursor(db.from('loans').select('id,bill,loan_date,amount,releases(release_date,interest,total)')
+          .eq('shop_id',shop).eq('customer_id',id),[['loan_date',false],['id',true]],cursor),
         l=>[l.bill,l.loan_date,money(l.amount),l.releases?.release_date,l.releases&&money(l.releases.interest),l.releases&&money(l.releases.total)])
     ]);
   },false);
