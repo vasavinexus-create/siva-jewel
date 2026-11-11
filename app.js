@@ -174,10 +174,10 @@ async function mount(page, screen) {
     if(session){
       const [owner,memberships]=await Promise.all([
         result(db.rpc('is_owner')),
-        result(db.from('staff').select('shop_id,pages,shops(id,name,paused)').eq('user_id',session.user.id))
+        result(db.from('staff').select('shop_id,pages,shops(id,name,paused)').eq('user_id',session.user.id).order('shop_id'))
       ]);
       shops=memberships.flatMap(m=>m.shops&&!m.shops.paused?[m.shops]:[]);
-      const selectedId=sessionStorage.getItem(shopKey);
+      const selectedId=owner?sessionStorage.getItem(shopKey):null;
       if(owner){
         const query=db.from('shops').select('id,name,paused');
         const selected=selectedId?await result(query.eq('id',selectedId).maybeSingle()):null;
@@ -195,35 +195,16 @@ async function mount(page, screen) {
     root.innerHTML='<a class="skip-link" href="#main-content">Skip to content</a>'+
       '<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">SJ</span>'+
       '<span class="brand-name">Siva Jewel<small>Pawn Ledger</small></span></div>'+
-      (session?'<div class="header-actions">'+(shops.length?'<label class="shop-picker"><span>Shop</span><select id="shop" aria-label="Shop">'+
-        shops.map(s=>option(s.id,s.name)).join('')+'</select></label>':'')+
-        '<button id="logout" type="button">Sign out</button></div>':'')+'</header>'+
-      (permitted.length?'<div class="navigation"><button type="button" id="menu-toggle" aria-expanded="false" aria-controls="main-nav">'+
-        '<span>Menu</span><span aria-hidden="true" class="menu-icon"></span></button><nav id="main-nav" aria-label="Main navigation">'+
+      (session?'<button id="logout" type="button">Sign out</button>':'')+'</header>'+
+      '<main id="main-content" tabindex="-1"><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>'+
+      (permitted.length?'<nav class="bottom-nav" aria-label="Main navigation">'+
         permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('')+
-        '</nav></div>':'')+
-      '<main id="main-content" tabindex="-1"><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>';
-    const menu=document.querySelector('#menu-toggle');
-    if(menu){
-      const close=()=>menu.setAttribute('aria-expanded','false');
-      menu.onclick=()=>menu.setAttribute('aria-expanded',String(menu.getAttribute('aria-expanded')!=='true'));
-      root.addEventListener('keydown',event=>{
-        if(event.key==='Escape'&&menu.getAttribute('aria-expanded')==='true'){
-          close();
-          menu.focus();
-        }
-      });
-    }
+        '</nav>':'');
     if(session) document.querySelector('#logout').onclick=run(async()=>{
       await result(db.auth.signOut());
       sessionStorage.removeItem(shopKey);
       navigate('login');
     });
-    const selector=document.querySelector('#shop');
-    if(selector){
-      selector.value=shop;
-      selector.onchange=()=>selectShop(selector.value);
-    }
     await screen();
   } catch(error) {
     const message=document.querySelector('#message')||root;
