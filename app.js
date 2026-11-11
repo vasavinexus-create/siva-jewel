@@ -319,7 +319,7 @@ async function mount(page, screen) {
         return navigate(permitted[0]||'unassigned');
       }
     }
-    const activeShop=shops.find(item=>item.id===shop);
+    const activeShop=session?shops.find(item=>item.id===shop):undefined;
     const branding=activeShop?await result(db.from('shops').select('logo').eq('id',activeShop.id).maybeSingle()):null;
     const brandName=activeShop?.name || 'Siva Jewel';
     const brandMark=branding?.logo

@@ -23,7 +23,32 @@ Deno.serve(async req => {
     });
     const { data: identity, error: identityError } = await caller.auth.getUser(auth.slice(7));
     if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
-    const { shop, shopName, logo = null, username, password, admin = false, pages = [] } = await req.json();
+    const { shop, shopName, logo = null, username, password, administratorId, admin = false, pages = [] } = await req.json();
+    if (administratorId !== undefined) {
+      const email = loginEmail(username);
+      if (typeof shop !== 'string' || typeof administratorId !== 'string' || !email ||
+          typeof password !== 'string' || (password !== '' && password.length < 6)) {
+        return reply(400, { error: 'Invalid administrator credentials' });
+      }
+      const owner = await caller.rpc('is_owner');
+      if (owner.error || !owner.data) return reply(403, { error: 'Shop access denied' });
+
+      const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const [membership, platformOwner] = await Promise.all([
+        service.from('staff').select('user_id').eq('shop_id', shop).eq('user_id', administratorId).contains('pages', ['admin']).maybeSingle(),
+        service.from('owners').select('user_id').eq('user_id', administratorId).maybeSingle(),
+      ]);
+      if (membership.error || platformOwner.error) return reply(500, { error: 'Could not verify the shop administrator' });
+      if (!membership.data || platformOwner.data) return reply(403, { error: 'This account cannot be edited from this shop' });
+      const { error } = await service.auth.admin.updateUserById(administratorId, {
+        email, email_confirm: true, ...(password ? { password } : {}),
+      });
+      if (error?.code === 'email_exists' || error?.code === 'user_already_exists') {
+        return reply(409, { error: 'This username is already in use. Choose a unique username.' });
+      }
+      if (error) return reply(400, { error: error.message });
+      return reply(200, { id: administratorId });
+    }
     const creatingShop = shopName !== undefined;
     const name = typeof shopName === 'string' ? shopName.trim() : '';
     if (logo !== null && (!creatingShop || typeof logo !== 'string' || logo.length > 100000 ||

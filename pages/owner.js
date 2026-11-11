@@ -1,4 +1,5 @@
-import { mount,db,shop,field,usernameField,form,result,escape,section,cursorList,fetchCursor,selectShop } from '../app.js';
+import { mount,db,shop,field,usernameField,form,result,run,escape,section,cursorList,fetchCursor,selectShop } from '../app.js';
+import { loginDomain, usernamePattern } from '../supabase/functions/_shared/login.js';
 
 const adminFields=()=>usernameField('Shop administrator username')+
   field('password','Shop administrator password','type="password" minlength="6" autocomplete="new-password" required');
@@ -22,7 +23,7 @@ async function prepareLogo(file){
   }
 }
 
-async function createAdministrator(details){
+async function saveAdministrator(details){
   const {data,error}=await db.functions.invoke('create-staff',{body:{...details,admin:true}});
   if(!error) return data;
   const response=await error.context?.json?.().catch(()=>null);
@@ -31,10 +32,10 @@ async function createAdministrator(details){
 
 mount('owner',async()=>{
   form(field('shopName','Shop name')+logoField()+adminFields(),'Create shop',async ({logo,...data})=>{
-    const added=await createAdministrator({...data,logo:await prepareLogo(logo)});
+    const added=await saveAdministrator({...data,logo:await prepareLogo(logo)});
     selectShop(added.shopId);
   },false);
-  if(shop) form(adminFields(),'Create shop admin for selected shop',data=>createAdministrator({...data,shop}));
+  if(shop) form(adminFields(),'Create shop admin for selected shop',data=>saveAdministrator({...data,shop}));
   section('<div id="shops"></div>');
   await cursorList(document.querySelector('#shops'),cursor=>fetchCursor(db.from('shops').select('id,name,paused'),
     [['name',true],['id',true]],cursor),(shops,container)=>{
@@ -54,6 +55,23 @@ mount('owner',async()=>{
         const image=await prepareLogo(logo);
         await result(db.from('shops').update({name:trimmed,...(image?{logo:image}:{})}).eq('id',item.id).select('id').single());
       },true,edit);
+      const administrators=document.createElement('div');
+      edit.append(administrators);
+      let loaded=false;
+      edit.addEventListener('toggle',run(async()=>{
+        if(!edit.open || loaded) return;
+        const members=await result(db.from('staff').select('user_id,email').eq('shop_id',item.id).contains('pages',['admin']).order('email'));
+        for(const member of members){
+          const username=member.email?.endsWith('@'+loginDomain)?member.email.slice(0,-loginDomain.length-1):'';
+          form(field('username','Shop administrator username',
+            'required pattern="'+usernamePattern+'" autocomplete="off" value="'+escape(username)+'"')+
+            field('password','New password (leave blank to keep current password)',
+              'type="password" minlength="6" autocomplete="new-password"'),
+            'Save administrator login',data=>saveAdministrator({...data,shop:item.id,administratorId:member.user_id}),true,administrators);
+        }
+        if(!members.length) administrators.textContent='This shop has no administrator.';
+        loaded=true;
+      }));
       editor.after(edit);
     }
   });
