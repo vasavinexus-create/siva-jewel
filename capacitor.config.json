@@ -1,5 +1,8 @@
 {
   "appId": "in.sivajewel.pawnledger",
   "appName": "Siva Jewel",
-  "webDir": "dist"
+  "webDir": "dist",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
 }

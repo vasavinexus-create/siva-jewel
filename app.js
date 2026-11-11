@@ -13,12 +13,20 @@ const permissions = Object.keys(labels).filter(page => page !== 'admin');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field = (name, label, attributes = 'required') => '<label>'+label+'<input name="'+name+'" '+attributes+'></label>';
 const usernameField = label => field('username',label,'required pattern="'+usernamePattern+'" autocomplete="username" autocapitalize="none" spellcheck="false" title="3 to 32 letters, digits, underscores or hyphens"');
-const photo = (name, label) => field(name,label,'type="file" accept="image/jpeg,image/png,image/webp" capture="environment"') +
-  (Capacitor.isNativePlatform() ? '<button type="button" data-camera="'+name+'">Take '+label.toLowerCase()+'</button>' : '');
+const photo = (name, label) => '<div class="photo-field">'+
+  field(name,label,'type="file" accept="image/jpeg,image/png,image/webp" capture="environment"')+
+  (Capacitor.isNativePlatform()?'<button type="button" data-camera="'+name+'">Take '+label.toLowerCase()+'</button>':'')+'</div>';
 const option = (value, label) => '<option value="'+escape(value)+'">'+escape(label)+'</option>';
 const money = value => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(value);
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const table = (headers,rows) => '<div class="scroll"><table><thead><tr>'+headers.map(h=>'<th>'+escape(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+escape(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+const table = (headers,rows) => {
+  if(!rows.length) return '<p class="empty-state">No records found.</p>';
+  return '<div class="scroll"><table role="table"><thead role="rowgroup"><tr role="row">'+
+    headers.map(h=>'<th scope="col" role="columnheader">'+escape(h)+'</th>').join('')+
+    '</tr></thead><tbody role="rowgroup">'+rows.map(row=>'<tr role="row">'+row.map((value,index)=>
+      '<td role="cell"><span class="cell-label" aria-hidden="true">'+escape(headers[index])+'</span><span>'+escape(value)+'</span></td>'
+    ).join('')+'</tr>').join('')+'</tbody></table></div>';
+};
 let shop, shops;
 const result = async request => {
   const {data,error} = await request;
@@ -183,11 +191,29 @@ async function mount(page, screen) {
         return navigate(permitted[0]||'unassigned');
       }
     }
-    root.innerHTML='<header><strong>Siva Jewel · Pawn Ledger</strong>'+
-      (session?(shops.length?'<select id="shop" aria-label="Shop">'+shops.map(s=>option(s.id,s.name)).join('')+'</select>':'')+
-        '<button id="logout">Sign out</button>':'')+'</header>'+
-      (permitted.length?'<nav>'+permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('')+'</nav>':'')+
-      '<main><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>';
+    root.className=page==='login'?'auth-layout':'workspace-layout';
+    root.innerHTML='<a class="skip-link" href="#main-content">Skip to content</a>'+
+      '<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">SJ</span>'+
+      '<span class="brand-name">Siva Jewel<small>Pawn Ledger</small></span></div>'+
+      (session?'<div class="header-actions">'+(shops.length?'<label class="shop-picker"><span>Shop</span><select id="shop" aria-label="Shop">'+
+        shops.map(s=>option(s.id,s.name)).join('')+'</select></label>':'')+
+        '<button id="logout" type="button">Sign out</button></div>':'')+'</header>'+
+      (permitted.length?'<div class="navigation"><button type="button" id="menu-toggle" aria-expanded="false" aria-controls="main-nav">'+
+        '<span>Menu</span><span aria-hidden="true" class="menu-icon"></span></button><nav id="main-nav" aria-label="Main navigation">'+
+        permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('')+
+        '</nav></div>':'')+
+      '<main id="main-content" tabindex="-1"><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>';
+    const menu=document.querySelector('#menu-toggle');
+    if(menu){
+      const close=()=>menu.setAttribute('aria-expanded','false');
+      menu.onclick=()=>menu.setAttribute('aria-expanded',String(menu.getAttribute('aria-expanded')!=='true'));
+      root.addEventListener('keydown',event=>{
+        if(event.key==='Escape'&&menu.getAttribute('aria-expanded')==='true'){
+          close();
+          menu.focus();
+        }
+      });
+    }
     if(session) document.querySelector('#logout').onclick=run(async()=>{
       await result(db.auth.signOut());
       sessionStorage.removeItem(shopKey);
