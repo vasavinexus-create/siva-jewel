@@ -23,9 +23,12 @@ Deno.serve(async req => {
     });
     const { data: identity, error: identityError } = await caller.auth.getUser(auth.slice(7));
     if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
-    const { shop, username, password, admin = false, pages = [] } = await req.json();
+    const { shop, shopName, username, password, admin = false, pages = [] } = await req.json();
+    const creatingShop = shopName !== undefined;
+    const name = typeof shopName === 'string' ? shopName.trim() : '';
     const email = loginEmail(username);
-    if (typeof shop !== 'string' || !email || typeof password !== 'string' || password.length < 6 ||
+    if ((creatingShop ? !name || admin !== true || shop !== undefined : typeof shop !== 'string') ||
+        !email || typeof password !== 'string' || password.length < 6 ||
         typeof admin !== 'boolean' || !Array.isArray(pages) || pages.some(p => !allowedPages.includes(p))) {
       return reply(400, { error: 'Invalid staff details' });
     }
@@ -38,16 +41,18 @@ Deno.serve(async req => {
       return reply(409, { error: 'This username is already in use. Choose a unique username.' });
     }
     if (error || !data.user) return reply(400, { error: error?.message || 'User creation failed' });
-    const membership = await caller.from('staff').insert({
+    const membership = creatingShop
+      ? await caller.rpc('create_shop_with_admin', { shop_name: name, admin_id: data.user.id, admin_email: email })
+      : await caller.from('staff').insert({
       shop_id: shop, user_id: data.user.id, email: data.user.email,
       pages: admin ? ['admin'] : [...new Set(['shop', ...pages])],
     });
     if (membership.error) {
       const cleanup = await service.auth.admin.deleteUser(data.user.id);
       if (cleanup.error) console.error('Auth cleanup failed', data.user.id, cleanup.error.message);
-      return reply(400, { error: 'Shop membership could not be saved' });
+      return reply(400, { error: creatingShop ? 'The shop and its administrator could not be saved' : 'Shop membership could not be saved' });
     }
-    return reply(201, { id: data.user.id });
+    return reply(201, { id: data.user.id, shopId: creatingShop ? membership.data : shop });
   } catch (error) {
     console.error(error);
     return reply(400, { error: 'Unable to create staff account' });

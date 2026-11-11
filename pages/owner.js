@@ -1,17 +1,21 @@
 import { mount,db,shop,field,usernameField,form,result,escape,section,cursorList,fetchCursor,selectShop } from '../app.js';
 
+const adminFields=()=>usernameField('Shop administrator username')+
+  field('password','Shop administrator password','type="password" minlength="6" autocomplete="new-password" required');
+
+async function createAdministrator(details){
+  const {data,error}=await db.functions.invoke('create-staff',{body:{...details,admin:true}});
+  if(!error) return data;
+  const response=await error.context?.json?.().catch(()=>null);
+  throw new Error(response?.error || error.message);
+}
+
 mount('owner',async()=>{
-  form(field('name','Shop name'),'Add shop',async data=>{
-    const added=await result(db.from('shops').insert(data).select('id').single());
-    selectShop(added.id);
+  form(field('shopName','Shop name')+adminFields(),'Create shop',async data=>{
+    const added=await createAdministrator(data);
+    selectShop(added.shopId);
   },false);
-  if(shop) form(usernameField('Shop administrator username')+field('password','Temporary password','type="password" minlength="6" required'),
-    'Create shop admin for selected shop',async data=>{
-      const {error}=await db.functions.invoke('create-staff',{body:{...data,shop,admin:true}});
-      if(!error) return;
-      const details=await error.context?.json?.().catch(()=>null);
-      throw new Error(details?.error || error.message);
-    });
+  if(shop) form(adminFields(),'Create shop admin for selected shop',data=>createAdministrator({...data,shop}));
   section('<div id="shops"></div>');
   await cursorList(document.querySelector('#shops'),cursor=>fetchCursor(db.from('shops').select('id,name,paused'),
     [['name',true],['id',true]],cursor),(shops,container)=>{
@@ -23,6 +27,14 @@ mount('owner',async()=>{
       const select=editor.querySelector('[data-select]');
       select.disabled=item.id===shop;
       select.onclick=()=>selectShop(item.id);
+      const edit=document.createElement('details');
+      edit.innerHTML='<summary>Edit shop</summary>';
+      form(field('name','Shop name','required value="'+escape(item.name)+'"'),'Save shop name',async ({name})=>{
+        const trimmed=name.trim();
+        if(!trimmed) throw new Error('Enter a shop name.');
+        await result(db.from('shops').update({name:trimmed}).eq('id',item.id).select('id').single());
+      },true,edit);
+      editor.after(edit);
     }
   });
 });
