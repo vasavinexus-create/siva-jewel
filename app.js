@@ -88,6 +88,39 @@ const showPhoto = async (container,path,label) => {
   container.append(img);
 };
 
+const customerPreviewFields='name,village,address,mobile,reference,photo';
+function customerPreview(editor) {
+  editor.insertAdjacentHTML('beforebegin','<section class="customer-preview" aria-label="Selected customer" hidden></section>');
+  const panel=editor.previousElementSibling;
+  let version=0;
+  return run(async load=>{
+    const ticket=++version;
+    panel.replaceChildren();
+    panel.hidden=true;
+    if(!load) return;
+    const {customer,jewel}=await load();
+    if(ticket!==version||!customer) return;
+    const content=document.createElement('div');
+    content.className='preview-content';
+    const details=[['Mobile',customer.mobile],['Village',customer.village],['Address',customer.address],['Reference',customer.reference]];
+    content.innerHTML='<div><h2>'+escape(customer.name)+'</h2><dl>'+
+      details.filter(([,value])=>value).map(([label,value])=>'<div><dt>'+label+'</dt><dd>'+escape(value)+'</dd></div>').join('')+
+      '</dl></div><div class="preview-photos"></div>';
+    const photos=content.querySelector('.preview-photos');
+    const addPhoto=async (path,label)=>{
+      if(!path) return;
+      const figure=document.createElement('figure');
+      figure.innerHTML='<figcaption>'+label+'</figcaption>';
+      photos.append(figure);
+      try {await showPhoto(figure,path,label);}
+      catch {figure.insertAdjacentHTML('beforeend','<p>Photo unavailable.</p>');}
+    };
+    panel.append(content);
+    panel.hidden=false;
+    await Promise.all([addPhoto(customer.photo,'Customer photo'),addPhoto(jewel,'Pledged jewel')]);
+  });
+}
+
 const lookupField=(name,label,placeholder)=>'<div class="lookup"><label for="'+name+'-search">'+label+'</label>'+
   '<input id="'+name+'-search" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="'+name+'-results" '+
   'placeholder="'+placeholder+'" autocomplete="off" required>'+
@@ -253,7 +286,7 @@ function submitFinancial(form,operation,payload) {
   return result(db.rpc('submit_financial',{s:shop,request_id:request.id,operation,payload}));
 }
 
-export {mount,db,shop,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,navigate,lookupField,searchCustomers,searchLookup,paginated,cursorList,fetchCursor,selectShop,submitFinancial};
+export {mount,db,shop,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,customerPreview,customerPreviewFields,navigate,lookupField,searchCustomers,searchLookup,paginated,cursorList,fetchCursor,selectShop,submitFinancial};
 const pageUrl = page => new URL(page === 'login' ? './index.html' : './'+page+'.html', location.href);
 const navigate = page => location.replace(pageUrl(page));
 const shopKey = 'pawn-active-shop';
@@ -286,15 +319,30 @@ async function mount(page, screen) {
         return navigate(permitted[0]||'unassigned');
       }
     }
+    const links=permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('');
     root.className=page==='login'?'auth-layout':'workspace-layout';
     root.innerHTML='<a class="skip-link" href="#main-content">Skip to content</a>'+
-      '<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">SJ</span>'+
+      '<header class="app-header">'+(links?'<details class="top-menu"><summary>Menu</summary><nav aria-label="Page menu">'+links+'</nav></details>':'')+
+      '<div class="brand"><span class="brand-mark" aria-hidden="true">SJ</span>'+
       '<span class="brand-name">Siva Jewel<small>Pawn Ledger</small></span></div>'+
       (session?'<button id="logout" type="button">Sign out</button>':'')+'</header>'+
       '<main id="main-content" tabindex="-1"><h1>'+escape(labelsByPage[page])+'</h1><p id="message" role="status"></p></main>'+
-      (permitted.length?'<nav class="bottom-nav" aria-label="Main navigation">'+
-        permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('')+
-        '</nav>':'');
+      (links?'<div class="bottom-bar"><button type="button" data-scroll="-1" aria-label="Scroll menu left">‹</button>'+
+        '<nav class="bottom-nav" aria-label="Main navigation">'+links+'</nav>'+
+        '<button type="button" data-scroll="1" aria-label="Scroll menu right">›</button></div>':'');
+    if(links){
+      const menu=root.querySelector('.top-menu');
+      menu.addEventListener('keydown',event=>{
+        if(event.key==='Escape'&&menu.open){menu.open=false;menu.querySelector('summary').focus();}
+      });
+      root.addEventListener('click',event=>{if(!menu.contains(event.target)) menu.open=false;});
+      const bar=root.querySelector('.bottom-nav');
+      const active=bar.querySelector('[aria-current]');
+      bar.scrollLeft=active.offsetLeft-(bar.clientWidth-active.offsetWidth)/2;
+      root.querySelectorAll('[data-scroll]').forEach(button=>button.onclick=()=>{
+        bar.scrollBy({left:Number(button.dataset.scroll)*bar.clientWidth*.75});
+      });
+    }
     if(session) document.querySelector('#logout').onclick=run(async()=>{
       await result(db.auth.signOut());
       sessionStorage.removeItem(shopKey);

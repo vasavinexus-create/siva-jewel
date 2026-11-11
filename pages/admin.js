@@ -4,7 +4,7 @@ import { loginDomain } from '../supabase/functions/_shared/login.js';
 mount('admin',async()=>{
     const checks = selected => permissions.map(p=>'<label><span><input name="'+p+'" type="checkbox" '+(selected.includes(p)?'checked':'')+'> '+escape(labels[p]||'Shop sign-in')+'</span></label>').join('');
     const selected = data => permissions.filter(p=>data[p]);
-    form(usernameField('Staff username')+field('password','Temporary password','type="password" minlength="12" required')+checks([]),
+    form(usernameField('Staff username')+field('password','Temporary password','type="password" minlength="6" required')+checks([]),
       'Create staff',data=>result(db.functions.invoke('create-staff',{body:{username:data.username,password:data.password,shop,pages:selected(data)}})));
     section('<div id="staff"></div>');
     await cursorList(document.querySelector('#staff'),cursor=>fetchCursor(db.from('staff').select('user_id,email,pages')

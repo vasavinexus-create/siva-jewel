@@ -1,4 +1,4 @@
-import { mount,field,photo,today,form,upload,lookupField,searchCustomers,submitFinancial } from '../app.js';
+import { mount,db,shop,result,customerPreview,customerPreviewFields,field,photo,today,form,upload,lookupField,searchCustomers,submitFinancial } from '../app.js';
 
 mount('loans',async()=>{
     let uploadedFile;
@@ -17,5 +17,13 @@ mount('loans',async()=>{
         data.photo=photoPath??null;
         await submitFinancial(editor,'pledge',data);
       });
+    const preview=customerPreview(editor);
+    const customer=editor.elements.customer_id;
+    customer.onchange=()=>{
+      const id=customer.value;
+      return preview(id?async()=>({
+        customer:await result(db.from('customers').select(customerPreviewFields).eq('shop_id',shop).eq('id',id).single())
+      }):null);
+    };
     searchCustomers(editor,'customer_id');
 });

@@ -1,4 +1,4 @@
-import { mount,db,shop,escape,field,money,today,result,run,form,section,showPhoto,lookupField,searchLookup,submitFinancial } from '../app.js';
+import { mount,db,shop,escape,field,money,today,result,run,form,section,customerPreview,customerPreviewFields,lookupField,searchLookup,submitFinancial } from '../app.js';
 
 mount('release', async () => {
   let version=0;
@@ -11,10 +11,10 @@ mount('release', async () => {
     if(!ready) throw new Error('Wait for the current quote.');
     await submitFinancial(editor,'release',data);
   });
-  section('<div id="quote"></div><div id="jewel"></div>');
+  const preview=customerPreview(editor);
+  section('<div id="quote"></div>');
   const e=editor.elements;
   const target=document.querySelector('#quote');
-  const jewel=document.querySelector('#jewel');
   const button=editor.querySelector('button[type=submit]');
   const lock=()=>{
     ready=false;
@@ -40,15 +40,21 @@ mount('release', async () => {
       '<div class="metrics"><span>Loan '+money(q.amount)+'</span><span>Interest '+money(q.interest)+'</span><strong>Total '+money(q.total)+'</strong></div>';
     ready=true;
     button.disabled=false;
-    if(defaults) await showPhoto(jewel,q.photo,'Pledged jewel');
   };
   const load=run(async()=>{
     const ticket=lock();
     target.textContent='';
-    jewel.replaceChildren();
     await quote(ticket,true);
   });
-  e.loan.onchange=load;
+  e.loan.onchange=()=>{
+    const id=e.loan.value;
+    void preview(id?async()=>{
+      const row=await result(db.from('loans').select('photo,customers('+customerPreviewFields+')')
+        .eq('shop_id',shop).eq('id',id).single());
+      return {customer:row.customers,jewel:row.photo};
+    }:null);
+    void load();
+  };
   e.on_date.onchange=load;
   e.billed_months.oninput=e.monthly_rate.oninput=()=>{
     const ticket=lock();

@@ -25,7 +25,7 @@ Deno.serve(async req => {
     if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
     const { shop, username, password, admin = false, pages = [] } = await req.json();
     const email = loginEmail(username);
-    if (typeof shop !== 'string' || !email || typeof password !== 'string' || password.length < 12 ||
+    if (typeof shop !== 'string' || !email || typeof password !== 'string' || password.length < 6 ||
         typeof admin !== 'boolean' || !Array.isArray(pages) || pages.some(p => !allowedPages.includes(p))) {
       return reply(400, { error: 'Invalid staff details' });
     }

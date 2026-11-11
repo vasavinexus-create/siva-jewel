@@ -5,7 +5,7 @@ mount('owner',async()=>{
     const added=await result(db.from('shops').insert(data).select('id').single());
     selectShop(added.id);
   },false);
-  if(shop) form(usernameField('Shop administrator username')+field('password','Temporary password','type="password" minlength="12" required'),
+  if(shop) form(usernameField('Shop administrator username')+field('password','Temporary password','type="password" minlength="6" required'),
     'Create shop admin for selected shop',data=>result(db.functions.invoke('create-staff',{body:{...data,shop,admin:true}})));
   section('<div id="shops"></div>');
   await cursorList(document.querySelector('#shops'),cursor=>fetchCursor(db.from('shops').select('id,name,paused'),
