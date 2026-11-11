@@ -1,15 +1,14 @@
-import { mount,db,shop,escape,field,money,today,result,run,form,section,showPhoto,searchInput,submitFinancial } from '../app.js';
+import { mount,db,shop,escape,field,money,today,result,run,form,section,showPhoto,lookupField,searchLookup,submitFinancial } from '../app.js';
 
 mount('release', async () => {
   let version=0;
   let timer;
   let ready=false;
-  const editor=form(field('search','Bill, customer name or mobile','type="search"')+'<label>Bill<select name="loan" required></select></label>'+
+  const editor=form(lookupField('loan','Bill','Type a bill number, customer name or mobile')+
     field('on_date','Release date','type="date" required value="'+today()+'"')+
     field('billed_months','Months charged','type="number" min="0" step="1" required')+
     field('monthly_rate','Monthly interest %','type="number" min="0" max="9999.9999" step=".0001" required'),'Record release',async (data,editor)=>{
     if(!ready) throw new Error('Wait for the current quote.');
-    delete data.search;
     await submitFinancial(editor,'release',data);
   });
   section('<div id="quote"></div><div id="jewel"></div>');
@@ -56,6 +55,7 @@ mount('release', async () => {
     target.textContent='Updating quote…';
     timer=setTimeout(run(()=>quote(ticket,false)),200);
   };
-  await searchInput(e.search,e.loan,term=>result(db.rpc('search_open_loans',{s:shop,term})),
-    l=>l.bill+' · '+l.customer,'Select bill',load);
+  searchLookup(editor,'loan',term=>result(db.rpc('search_open_loans',{s:shop,term})),
+    l=>l.bill+' · '+l.customer);
+  await load();
 });

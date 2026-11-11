@@ -50,6 +50,16 @@ const form = (html, label, submit, refresh = true, container = document.querySel
     files.items.add(new File([blob],'capture.jpg',{type:'image/jpeg'}));
     target.elements[button.dataset.camera].files=files.files;
   }));
+  const controls='input:not([type=hidden]), select, textarea';
+  target.querySelectorAll(controls).forEach(control=>control.setAttribute('enterkeyhint','next'));
+  target.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'||event.defaultPrevented||event.isComposing||!event.target.matches(controls)) return;
+    event.preventDefault();
+    if(event.repeat) return;
+    const fields=[...target.querySelectorAll(controls)];
+    const next=fields.slice(fields.indexOf(event.target)+1).find(control=>!control.matches(':disabled')&&control.getClientRects().length);
+    (next||target.querySelector('button[type=submit]:enabled'))?.focus();
+  });
   container.append(target);
   target.onsubmit = run(async event => {
     event.preventDefault();
@@ -78,28 +88,113 @@ const showPhoto = async (container,path,label) => {
   container.append(img);
 };
 
-function searchInput(input, select, search, display, empty, onMatch = async () => {}) {
+const lookupField=(name,label,placeholder)=>'<div class="lookup"><label for="'+name+'-search">'+label+'</label>'+
+  '<input id="'+name+'-search" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="'+name+'-results" '+
+  'placeholder="'+placeholder+'" autocomplete="off" required>'+
+  '<input type="hidden" name="'+name+'"><div class="lookup-results" hidden>'+
+  '<ul id="'+name+'-results" role="listbox" aria-label="'+label+' matches"></ul><p role="status" hidden></p></div></div>';
+
+function searchLookup(editor,name,search,display) {
+  const selected=editor.elements[name];
+  const wrapper=selected.closest('.lookup');
+  const input=wrapper.querySelector('[role=combobox]');
+  const popup=wrapper.querySelector('.lookup-results');
+  const list=popup.querySelector('[role=listbox]');
+  const status=popup.querySelector('[role=status]');
+  let matches=[];
+  let active=-1;
   let version=0;
   let timer;
-  const load=async ticket=>{
-    const matches=await search(input.value);
-    if(ticket!==version) return;
-    select.innerHTML=option('',empty)+matches.map(item=>option(item.id,display(item))).join('');
-    const exact=matches.find(item=>item.exact_bill);
-    if(exact) select.value=exact.id;
-    await onMatch();
+  const close=()=>{
+    popup.hidden=true;
+    input.setAttribute('aria-expanded','false');
+    highlight(-1);
   };
-  input.oninput=()=>{
-    const ticket=++version;
-    select.replaceChildren();
+  const open=message=>{
+    popup.hidden=false;
+    input.setAttribute('aria-expanded','true');
+    status.textContent=message;
+    status.hidden=!message;
+  };
+  function highlight(index) {
+    list.children[active]?.setAttribute('aria-selected','false');
+    active=index;
+    const item=list.children[active];
+    if(item){
+      item.setAttribute('aria-selected','true');
+      input.setAttribute('aria-activedescendant',item.id);
+      item.scrollIntoView({block:'nearest'});
+    } else input.removeAttribute('aria-activedescendant');
+  }
+  function setSelected(item) {
+    const id=item?.id||'';
+    input.setCustomValidity(id||!input.value?'':'Choose a result from the list.');
+    if(selected.value===id) return;
+    selected.value=id;
+    selected.dispatchEvent(new Event('change'));
+  }
+  function choose(item) {
+    input.value=display(item);
+    setSelected(item);
+    close();
+    input.focus();
+  }
+  function schedule() {
     clearTimeout(timer);
-    timer=setTimeout(run(()=>load(ticket)),250);
+    const ticket=++version;
+    matches=[];
+    highlight(-1);
+    list.replaceChildren();
+    const term=input.value.trim();
+    if(!term){close();return;}
+    open('Searching…');
+    timer=setTimeout(async()=>{
+      try {
+        const found=await search(term);
+        if(ticket!==version||document.activeElement!==input) return;
+        matches=found;
+        for(const [index,item] of matches.entries()){
+          const entry=document.createElement('li');
+          entry.id=list.id+'-'+index;
+          entry.setAttribute('role','option');
+          entry.setAttribute('aria-selected','false');
+          entry.textContent=display(item);
+          entry.addEventListener('pointerdown',event=>event.preventDefault());
+          entry.addEventListener('click',()=>choose(item));
+          list.append(entry);
+        }
+        const exact=matches.find(item=>item.exact_bill);
+        if(exact) setSelected(exact);
+        open(matches.length?'':'No matches found.');
+      } catch(error) {
+        if(ticket===version&&document.activeElement===input) open(error.message||'Search failed.');
+      }
+    },250);
+  }
+  input.oninput=()=>{
+    setSelected(null);
+    schedule();
   };
-  return load(++version);
+  input.onfocus=()=>{if(!selected.value) schedule();};
+  input.onblur=()=>{clearTimeout(timer);version++;close();};
+  input.addEventListener('keydown',event=>{
+    if(event.isComposing) return;
+    if(event.key==='Escape'&&!popup.hidden){
+      event.preventDefault();
+      clearTimeout(timer);
+      version++;
+      close();
+    } else if((event.key==='ArrowDown'||event.key==='ArrowUp')&&matches.length&&!popup.hidden){
+      event.preventDefault();
+      highlight(event.key==='ArrowDown'?(active+1)%matches.length:(active<1?matches.length-1:active-1));
+    } else if(event.key==='Enter'&&!popup.hidden){
+      const match=matches[active]||(!selected.value&&matches.length===1?matches[0]:null);
+      if(match) choose(match);
+    }
+  });
 }
-const searchCustomers = (input,select) => searchInput(input,select,
-  term=>result(db.rpc('search_customers',{s:shop,term})),
-  c=>c.name+' · '+c.mobile,'Select customer');
+const searchCustomers=(editor,name)=>searchLookup(editor,name,
+  term=>result(db.rpc('search_customers',{s:shop,term})),c=>c.name+' · '+c.mobile);
 
 const pageSize=50;
 
@@ -158,7 +253,7 @@ function submitFinancial(form,operation,payload) {
   return result(db.rpc('submit_financial',{s:shop,request_id:request.id,operation,payload}));
 }
 
-export {mount,db,shop,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,navigate,searchCustomers,searchInput,paginated,cursorList,fetchCursor,selectShop,submitFinancial};
+export {mount,db,shop,labels,permissions,escape,field,usernameField,photo,option,money,today,table,result,run,form,section,upload,showPhoto,navigate,lookupField,searchCustomers,searchLookup,paginated,cursorList,fetchCursor,selectShop,submitFinancial};
 const pageUrl = page => new URL(page === 'login' ? './index.html' : './'+page+'.html', location.href);
 const navigate = page => location.replace(pageUrl(page));
 const shopKey = 'pawn-active-shop';

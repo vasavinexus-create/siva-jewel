@@ -1,4 +1,4 @@
-import { mount, db, shop, escape, field, photo, money, result, form, upload, showPhoto, searchCustomers, paginated, fetchCursor } from '../app.js';
+import { mount, db, shop, escape, field, photo, money, result, form, upload, showPhoto, lookupField, searchCustomers, paginated, fetchCursor } from '../app.js';
 
 mount('customers', async () => {
   form(field('name','Name')+field('village','Village','')+field('address','Address','')+field('mobile','Mobile','type="tel" required')+
@@ -7,8 +7,7 @@ mount('customers', async () => {
     data.aadhaar_photo=await upload('identity',data.aadhaar_photo);
     await result(db.from('customers').insert({...data,shop_id:shop}));
   });
-  const history=form(field('search','Search name or mobile','type="search"')+
-    '<label>Customer history<select name="customer" required></select></label>','Show history',async ({customer:id})=>{
+  const history=form(lookupField('customer','Customer history','Type a name or mobile number'),'Show history',async ({customer:id})=>{
     const customer=await result(db.from('customers').select('name,mobile,address,village,reference,photo,aadhaar_photo')
       .eq('shop_id',shop).eq('id',id).single());
     const detail=document.querySelector('#history');
@@ -24,5 +23,5 @@ mount('customers', async () => {
     ]);
   },false);
   history.insertAdjacentHTML('afterend','<section id="history"></section>');
-  await searchCustomers(history.elements.search,history.elements.customer);
+  searchCustomers(history,'customer');
 });
