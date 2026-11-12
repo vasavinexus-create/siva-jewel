@@ -1,4 +1,5 @@
 import { mount,db,shop,result,money,run,customerPreview,customerPreviewFields,field,photo,today,form,upload,lookupField,searchCustomers,submitFinancial } from '../app.js';
+import { paymentFields,loadBankLedgers } from '../accounting.js';
 
 mount('loans',async()=>{
     let uploadedFile;
@@ -11,7 +12,7 @@ mount('loans',async()=>{
       field('amount','Loan principal (INR)','type="number" min=".01" step=".01" required')+
       field('grams','Grams','type="number" min=".001" step=".001" required')+
       field('rate','Monthly interest %','type="number" min="0" max="99.9999" step=".0001" required')+
-      field('notes','Jewel details and notes','')+photo('photo','Jewel photo'),'Save pledge',async (data,editor)=>{
+      field('notes','Jewel details and notes','')+photo('photo','Jewel photo')+paymentFields,'Save pledge',async (data,editor)=>{
         if(!quoted) throw new Error('Wait for the disbursement calculation.');
         const file=editor.elements.photo.files[0];
         if(file!==uploadedFile){
@@ -51,4 +52,5 @@ mount('loans',async()=>{
       }):null);
     };
     searchCustomers(editor,'customer_id');
+    await loadBankLedgers(editor);
 });

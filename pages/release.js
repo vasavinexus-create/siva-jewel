@@ -1,4 +1,5 @@
 import { mount,db,shop,escape,field,money,today,result,run,form,section,customerPreview,customerPreviewFields,lookupField,searchLookup,submitFinancial } from '../app.js';
+import { paymentFields,loadBankLedgers } from '../accounting.js';
 
 mount('release', async () => {
   let version=0;
@@ -7,7 +8,7 @@ mount('release', async () => {
   const editor=form(lookupField('loan','Bill','Type a bill number, customer name or mobile')+
     field('on_date','Release date','type="date" required value="'+today()+'"')+
     field('billed_months','Months charged','type="number" min="0" step="1" required')+
-    field('monthly_rate','Monthly interest %','type="number" min="0" max="9999.9999" step=".0001" required'),'Record release',async (data,editor)=>{
+    field('monthly_rate','Monthly interest %','type="number" min="0" max="9999.9999" step=".0001" required')+paymentFields,'Record release',async (data,editor)=>{
     if(!ready) throw new Error('Wait for the current quote.');
     await submitFinancial(editor,'release',data);
   });
@@ -28,7 +29,7 @@ mount('release', async () => {
       target.textContent='Select an open bill and a release date.';
       return;
     }
-    if(!defaults&&(!e.billed_months.value||!e.monthly_rate.value||!editor.checkValidity())) return;
+    if(!defaults&&(!e.billed_months.value||!e.monthly_rate.value||!e.billed_months.validity.valid||!e.monthly_rate.validity.valid)) return;
     const q=await result(db.rpc('release_quote',{
       loan:e.loan.value,on_date:e.on_date.value,
       billed_months:defaults?null:Number(e.billed_months.value),monthly_rate:defaults?null:Number(e.monthly_rate.value)
@@ -65,5 +66,5 @@ mount('release', async () => {
   };
   searchLookup(editor,'loan',term=>result(db.rpc('search_open_loans',{s:shop,term})),
     l=>l.bill+' · '+l.customer);
-  await load();
+  await Promise.all([load(),loadBankLedgers(editor)]);
 });
