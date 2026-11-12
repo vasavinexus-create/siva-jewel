@@ -2,10 +2,11 @@ import { mount, db, shop, escape, field, photo, money, result, form, upload, sho
 
 mount('customers', async () => {
   form(field('name','Name')+field('village','Village','')+field('address','Address','')+field('mobile','Mobile','type="tel" required')+
-    field('reference','Reference','')+photo('photo','Customer photo')+photo('aadhaar_photo','Aadhaar photo'),'Add customer',async data=>{
+    field('reference','Reference','')+
+    field('aadhaar_number','Aadhaar number (optional)','inputmode="numeric" autocomplete="off" maxlength="14" placeholder="12 digits"')+photo('photo','Customer photo')+photo('aadhaar_photo','Aadhaar photo'),'Add customer',async data=>{
     data.photo=await upload('customer',data.photo);
     data.aadhaar_photo=await upload('identity',data.aadhaar_photo);
-    await result(db.from('customers').insert({...data,shop_id:shop}));
+    await result(db.rpc('create_customer',{s:shop,details:data}));
   });
   const history=form(lookupField('customer','Customer history','Type a name or mobile number'),'Show history',async ({customer:id})=>{
     const customer=await result(db.from('customers').select('name,mobile,address,village,reference,photo,aadhaar_photo')
