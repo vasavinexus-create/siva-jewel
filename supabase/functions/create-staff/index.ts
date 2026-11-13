@@ -40,8 +40,13 @@ Deno.serve(async req => {
       ]);
       if (membership.error || platformOwner.error) return reply(500, { error: 'Could not verify the shop administrator' });
       if (!membership.data || platformOwner.data) return reply(403, { error: 'This account cannot be edited from this shop' });
+      const { data: current, error: lookupError } = await service.auth.admin.getUserById(administratorId);
+      if (lookupError || !current.user) return reply(500, { error: 'Could not load the shop administrator login' });
+      const usernameChanged = current.user.email?.toLowerCase() !== email;
+      if (!usernameChanged && !password) return reply(200, { id: administratorId });
       const { error } = await service.auth.admin.updateUserById(administratorId, {
-        email, email_confirm: true, ...(password ? { password } : {}),
+        ...(usernameChanged ? { email, email_confirm: true } : {}),
+        ...(password ? { password } : {}),
       });
       if (error?.code === 'email_exists' || error?.code === 'user_already_exists') {
         return reply(409, { error: 'This username is already in use. Choose a unique username.' });

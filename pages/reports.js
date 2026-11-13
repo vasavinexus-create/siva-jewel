@@ -1,11 +1,11 @@
-import { mount,db,shop,escape,field,option,today,table,result,form,run } from '../app.js';
+import { dateField, mount,db,shop,escape,field,option,today,table,result,form,run } from '../app.js';
 
 const kinds=['Day book','Pledging','Releases','Profit and loss','Balance sheet','Trial balance','General ledger','Loan balance'];
 
 mount('reports', () => {
   let reportVersion=0;
   const filters=form('<label>Report<select name="kind">'+kinds.map(kind=>option(kind,kind)).join('')+'</select></label>'+
-    field('from','From','type="date"')+field('to','Through','type="date" value="'+today()+'"'),'Run report',async ({kind,from,to})=>{
+    dateField('from','From', '', false)+dateField('to','Through', today(), false),'Run report',async ({kind,from,to})=>{
     const version=++reportVersion;
     const output=document.querySelector('#report');
     const cursors=[null];

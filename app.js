@@ -1,6 +1,9 @@
 import { usernamePattern } from './supabase/functions/_shared/login.js';
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
+import { enableImageViewer, keepFocusedInputVisible } from './interactions.js';
+
+keepFocusedInputVisible();
 import { Capacitor } from '@capacitor/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
@@ -10,6 +13,9 @@ const { VITE_SUPABASE_URL: url, VITE_SUPABASE_ANON_KEY: key } = import.meta.env;
 const db = url && key ? createClient(url, key) : null;
 const labels = {customers:'Customers',loans:'Pledge loan',release:'Release',reports:'Reports',accounting:'Accounting',audit:'Release audit',admin:'Staff & access'};
 const permissions = Object.keys(labels).filter(page => page !== 'admin');
+// Extra pages that are unlocked by an existing permission (no new staff permission needed).
+const subPages = {accounting:['journal','balances']};
+const subPageLabels = {accounting:'Ledgers & groups',journal:'Journal entries',balances:'Ledger balances'};
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field = (name, label, attributes = 'required') => '<label>'+label+'<input name="'+name+'" '+attributes+'></label>';
 const usernameField = label => field('username',label,'required pattern="'+usernamePattern+'" autocomplete="username" autocapitalize="none" spellcheck="false" title="3 to 32 letters, digits, underscores or hyphens"');
@@ -19,12 +25,17 @@ const photo = (name, label) => '<div class="photo-field">'+
 const option = (value, label) => '<option value="'+escape(value)+'">'+escape(label)+'</option>';
 const money = value => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(value);
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+export const displayDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value.split('-').reverse().join('/') : value;
+export const dateField = (name,label,value=today(),required=true) => '<div class="date-field"><label>'+label+
+  '<input type="text" data-date-for="'+name+'" placeholder="DD/MM/YYYY" maxlength="10" value="'+displayDate(value)+'"'+
+  (required?' required':'')+'><input type="hidden" name="'+name+'" value="'+value+'"></label>'+
+  '<input type="date" aria-label="Calendar for '+label+'" data-date-picker max="'+today()+'"></div>';
 const table = (headers,rows) => {
   if(!rows.length) return '<p class="empty-state">No records found.</p>';
   return '<div class="scroll"><table role="table"><thead role="rowgroup"><tr role="row">'+
     headers.map(h=>'<th scope="col" role="columnheader">'+escape(h)+'</th>').join('')+
     '</tr></thead><tbody role="rowgroup">'+rows.map(row=>'<tr role="row">'+row.map((value,index)=>
-      '<td role="cell"><span class="cell-label" aria-hidden="true">'+escape(headers[index])+'</span><span>'+escape(value)+'</span></td>'
+      '<td role="cell"><span class="cell-label" aria-hidden="true">'+escape(headers[index])+'</span><span>'+escape(displayDate(value))+'</span></td>'
     ).join('')+'</tr>').join('')+'</tbody></table></div>';
 };
 let shop, shops;
@@ -61,6 +72,42 @@ const form = (html, label, submit, refresh = true, container = document.querySel
     (next||target.querySelector('button[type=submit]:enabled'))?.focus();
   });
   container.append(target);
+  target.querySelectorAll('[data-date-for]').forEach(input=>{
+    const date=target.elements[input.dataset.dateFor];
+    const picker=input.closest('.date-field').querySelector('[data-date-picker]');
+    const sync=()=>{
+      const match=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(input.value);
+      const iso=match?match[3]+'-'+match[2]+'-'+match[1]:'';
+      const parsed=Date.parse(iso+'T00:00:00Z');
+      const error=!input.value?'':!iso||!Number.isFinite(parsed)||new Date(parsed).toISOString().slice(0,10)!==iso
+        ?'Enter a valid date in DD/MM/YYYY format.'
+        :iso>today()?'Choose today or an earlier date.'
+        :date.min&&iso<date.min?'Choose '+displayDate(date.min)+' or a later date.':'';
+      date.value=error?'':iso;
+      input.setCustomValidity(error);
+    };
+    input.oninput=sync;
+    picker.addEventListener('focus',()=>{
+      picker.max=today();
+      picker.min=date.min||'';
+      picker.value=date.value;
+    });
+    picker.onchange=()=>{
+      input.value=displayDate(picker.value);
+      input.onchange();
+    };
+    input.onchange=()=>{
+      sync();
+      date.dispatchEvent(new Event('change'));
+    };
+    target.addEventListener('submit',event=>{
+      sync();
+      if(!input.reportValidity()){
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },true);
+  });
   target.onsubmit = run(async event => {
     event.preventDefault();
     const button = target.querySelector('button[type=submit]');
@@ -86,6 +133,7 @@ const showPhoto = async (container,path,label) => {
   img.src=signedUrl;
   img.alt=label;
   container.append(img);
+  enableImageViewer(img);
 };
 
 const customerPreviewFields='name,village,address,mobile,reference,photo';
@@ -98,11 +146,12 @@ function customerPreview(editor) {
     panel.replaceChildren();
     panel.hidden=true;
     if(!load) return;
-    const {customer,jewel}=await load();
+    const {customer,jewel,grams,notes}=await load();
     if(ticket!==version||!customer) return;
     const content=document.createElement('div');
     content.className='preview-content';
-    const details=[['Mobile',customer.mobile],['Village',customer.village],['Address',customer.address],['Reference',customer.reference]];
+    const details=[['Mobile',customer.mobile],['Village',customer.village],['Address',customer.address],['Reference',customer.reference],
+      ['Jewel weight',grams==null?null:grams+' g'],['Jewel details',notes]];
     content.innerHTML='<div><h2>'+escape(customer.name)+'</h2><dl>'+
       details.filter(([,value])=>value).map(([label,value])=>'<div><dt>'+label+'</dt><dd>'+escape(value)+'</dd></div>').join('')+
       '</dl></div><div class="preview-photos"></div>';
@@ -119,6 +168,15 @@ function customerPreview(editor) {
     panel.hidden=false;
     await Promise.all([addPhoto(customer.photo,'Customer photo'),addPhoto(jewel,'Pledged jewel')]);
   });
+}
+
+export function loanPreview(editor) {
+  const preview=customerPreview(editor);
+  return loan=>preview(loan?async()=>{
+    const row=await result(db.from('loans').select('photo,grams,notes,customers('+customerPreviewFields+')')
+      .eq('shop_id',shop).eq('id',loan).single());
+    return {customer:row.customers,jewel:row.photo,grams:row.grams,notes:row.notes};
+  }:null);
 }
 
 const lookupField=(name,label,placeholder)=>'<div class="lookup"><label for="'+name+'-search">'+label+'</label>'+
@@ -291,7 +349,7 @@ const pageUrl = page => new URL(page === 'login' ? './index.html' : './'+page+'.
 const navigate = page => location.replace(pageUrl(page));
 const shopKey = 'pawn-active-shop';
 const selectShop=id=>{sessionStorage.setItem(shopKey,id);location.reload();};
-const labelsByPage = {...labels, login:'Sign in', owner:'Platform owner', unassigned:'Shop access'};
+const labelsByPage = {...labels, ...subPageLabels, login:'Sign in', owner:'Platform owner', unassigned:'Shop access'};
 
 async function mount(page, screen) {
   if(!db) {root.textContent='Set the Supabase URL and public key to connect the ledger.'; return;}
@@ -314,17 +372,18 @@ async function mount(page, screen) {
       }
       shop=shops.find(s=>s.id===selectedId)?.id || shops[0]?.id;
       const allowed=memberships.find(m=>m.shop_id===shop && !shops.find(s=>s.id===shop)?.paused)?.pages || [];
-      permitted=[...(owner?['owner']:[]),...Object.keys(labels).filter(p=>allowed.includes('admin')||allowed.includes(p))];
+      permitted=[...(owner?['owner']:[]),...Object.keys(labels).filter(p=>allowed.includes('admin')||allowed.includes(p))
+        .flatMap(p=>[p,...(subPages[p]||[])])];
       if(page==='login'||(permitted.length?!permitted.includes(page):page!=='unassigned')) {
         return navigate(permitted[0]||'unassigned');
       }
     }
     const activeShop=session?shops.find(item=>item.id===shop):undefined;
     const branding=activeShop?await result(db.from('shops').select('logo').eq('id',activeShop.id).maybeSingle()):null;
-    const brandName=activeShop?.name || 'Siva Jewel';
+    const brandName=activeShop?.name || 'PledgePilot';
     const brandMark=branding?.logo
       ? '<img class="brand-mark brand-logo" src="'+escape(branding.logo)+'" alt="">'
-      : '<span class="brand-mark" aria-hidden="true">'+escape(brandName.trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase())+'</span>';
+      : !activeShop ? '<img class="brand-mark" src="./pledgepilot-192.png" alt="">' : '<span class="brand-mark" aria-hidden="true">'+escape(brandName.trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase())+'</span>';
     const links=permitted.map(p=>'<a href="'+escape(pageUrl(p).href)+'"'+(p===page?' aria-current="page"':'')+'>'+escape(labelsByPage[p])+'</a>').join('');
     root.className=page==='login'?'auth-layout':'workspace-layout';
     root.innerHTML='<a class="skip-link" href="#main-content">Skip to content</a>'+
@@ -336,6 +395,8 @@ async function mount(page, screen) {
       (links?'<div class="bottom-bar"><button type="button" data-scroll="-1" aria-label="Scroll menu left">‹</button>'+
         '<nav class="bottom-nav" aria-label="Main navigation">'+links+'</nav>'+
         '<button type="button" data-scroll="1" aria-label="Scroll menu right">›</button></div>':'');
+    const logo=root.querySelector('.brand-logo');
+    if(logo) enableImageViewer(logo);
     if(links){
       const menu=root.querySelector('.top-menu');
       menu.addEventListener('keydown',event=>{

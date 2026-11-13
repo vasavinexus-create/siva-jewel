@@ -1,4 +1,4 @@
-# Siva Jewel Pawn Ledger
+# PledgePilot
 
 Multi-shop pawn-broking web application with an Android build. Uses Supabase Auth, Postgres and private Storage.
 

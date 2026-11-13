@@ -1,6 +1,6 @@
 {
   "appId": "in.sivajewel.pawnledger",
-  "appName": "Siva Jewel",
+  "appName": "PledgePilot",
   "webDir": "dist",
   "android": {
     "adjustMarginsForEdgeToEdge": "auto"
