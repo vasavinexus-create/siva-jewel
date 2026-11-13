@@ -26,25 +26,52 @@ export function enableImageViewer(img) {
       full.style.height = full.naturalHeight * fit * zoom + 'px';
     }
     full.onload = resize;
+    resize();
     const observer = new ResizeObserver(resize);
     observer.observe(stage);
     dialog.addEventListener('close', () => observer.disconnect());
+    function setZoom(value) {
+      zoom = Math.max(1, Math.min(8, value));
+      resize();
+    }
     dialog.querySelectorAll('[data-zoom]').forEach(control => {
       control.onclick = () => {
-        zoom = Math.max(1, Math.min(8, zoom * 1.5 ** Number(control.dataset.zoom)));
-        resize();
+        setZoom(zoom * 1.5 ** Number(control.dataset.zoom));
       };
     });
-    let drag;
+    const pointers = new Map();
     stage.onpointerdown = event => {
-      if (event.button !== 0 || zoom === 1) return;
+      if (pointers.size >= 2) return;
+      if (event.pointerType !== 'touch' && (event.button !== 0 || zoom === 1 || pointers.size)) return;
+      if ([...pointers.values()].some(pointer => pointer.pointerType !== 'touch')) return;
       stage.setPointerCapture(event.pointerId);
-      drag = { x: event.clientX + stage.scrollLeft, y: event.clientY + stage.scrollTop };
+      pointers.set(event.pointerId, event);
     };
     stage.onpointermove = event => {
-      if (drag) stage.scrollTo(drag.x - event.clientX, drag.y - event.clientY);
+      const previous = pointers.get(event.pointerId);
+      if (!previous) return;
+      pointers.set(event.pointerId, event);
+      if (pointers.size === 1) {
+        if (zoom > 1) stage.scrollBy(previous.clientX - event.clientX, previous.clientY - event.clientY);
+        return;
+      }
+      const other = [...pointers.values()].find(pointer => pointer.pointerId !== event.pointerId);
+      const previousDistance = Math.hypot(previous.clientX - other.clientX, previous.clientY - other.clientY);
+      const distance = Math.hypot(event.clientX - other.clientX, event.clientY - other.clientY);
+      const image = full.getBoundingClientRect();
+      if (!previousDistance || !image.width || !image.height) return;
+      const x = ((previous.clientX + other.clientX) / 2 - image.left) / image.width;
+      const y = ((previous.clientY + other.clientY) / 2 - image.top) / image.height;
+      setZoom(zoom * distance / previousDistance);
+      const scaled = full.getBoundingClientRect();
+      stage.scrollBy(
+        scaled.left + x * scaled.width - (event.clientX + other.clientX) / 2,
+        scaled.top + y * scaled.height - (event.clientY + other.clientY) / 2
+      );
     };
-    stage.onlostpointercapture = () => { drag = undefined; };
+    stage.onpointerup = stage.onpointercancel = stage.onlostpointercapture = event => {
+      pointers.delete(event.pointerId);
+    };
   };
 }
 

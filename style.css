@@ -279,13 +279,32 @@ img { max-width: min(100%, 16rem); max-height: 15rem; border-radius: .65rem; obj
 .preview-photos figcaption { color: var(--muted); font-size: .8rem; font-weight: 650; }
 .preview-photos img { width: 7rem; height: 7rem; object-fit: contain; background: #edf3ee; }
 .view-image { display: inline-flex; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
-.image-viewer { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: .5rem; border: 0; background: #141414; }
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: max(.5rem, env(safe-area-inset-top)) max(.5rem, env(safe-area-inset-right))
+    max(.5rem, env(safe-area-inset-bottom)) max(.5rem, env(safe-area-inset-left));
+  border: 0;
+  overflow: hidden;
+  background: #141414;
+}
 .image-viewer[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: .5rem; }
 .image-viewer::backdrop { background: #141414; }
 .image-tools { display: flex; justify-content: center; gap: .5rem; flex-wrap: wrap; }
-.image-stage { display: flex; overflow: auto; touch-action: none; cursor: grab; }
+@media (hover: none) and (pointer: coarse) {
+  .image-tools [data-zoom] { display: none; }
+}
+.image-stage { display: flex; min-width: 0; overflow: auto; scrollbar-width: none; overscroll-behavior: contain; touch-action: none; cursor: grab; }
+.image-stage::-webkit-scrollbar { display: none; }
 .image-stage:active { cursor: grabbing; }
-.image-stage img { flex: none; max-width: none; margin: auto; user-select: none; pointer-events: none; }
+.image-stage img { flex: none; max-width: none; max-height: none; margin: auto; user-select: none; pointer-events: none; }
 body { padding-block-end: var(--keyboard-inset, 0px); }
 
 @media (max-width: 360px) {
