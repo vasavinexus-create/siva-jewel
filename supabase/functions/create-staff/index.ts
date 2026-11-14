@@ -8,7 +8,7 @@ const headers = {
   'Content-Type': 'application/json',
 };
 const reply = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers });
-const allowedPages = ['shop', 'customers', 'loans', 'release', 'reports', 'accounting', 'audit'];
+const allowedPages = ['shop', 'customers', 'customer_edit', 'loans', 'release', 'reports', 'accounting', 'journal', 'balances', 'audit', 'pledge_edit_all', 'pledge_edit_details'];
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { headers });
@@ -23,36 +23,44 @@ Deno.serve(async req => {
     });
     const { data: identity, error: identityError } = await caller.auth.getUser(auth.slice(7));
     if (identityError || !identity.user) return reply(401, { error: 'Sign in required' });
-    const { shop, shopName, logo = null, username, password, administratorId, admin = false, pages = [] } = await req.json();
-    if (administratorId !== undefined) {
-      const email = loginEmail(username);
-      if (typeof shop !== 'string' || typeof administratorId !== 'string' || !email ||
+    const { shop, shopName, logo = null, username, password, administratorId, staffId, admin = false, pages = [] } = await req.json();
+    if (administratorId !== undefined || staffId !== undefined) {
+      const editingAdmin = administratorId !== undefined;
+      const userId = editingAdmin ? administratorId : staffId;
+      const email = username === undefined ? null : loginEmail(username);
+      if (typeof shop !== 'string' || typeof userId !== 'string' ||
+          (username !== undefined && !email) || (editingAdmin && staffId !== undefined) ||
           typeof password !== 'string' || (password !== '' && password.length < 6)) {
-        return reply(400, { error: 'Invalid administrator credentials' });
+        return reply(400, { error: 'Invalid login details' });
       }
-      const owner = await caller.rpc('is_owner');
-      if (owner.error || !owner.data) return reply(403, { error: 'Shop access denied' });
+      const permitted = editingAdmin ? await caller.rpc('is_owner') :
+        await caller.rpc('can_access', { s: shop, p: 'admin' });
+      if (permitted.error || !permitted.data) return reply(403, { error: 'Shop access denied' });
 
       const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
       const [membership, platformOwner] = await Promise.all([
-        service.from('staff').select('user_id').eq('shop_id', shop).eq('user_id', administratorId).contains('pages', ['admin']).maybeSingle(),
-        service.from('owners').select('user_id').eq('user_id', administratorId).maybeSingle(),
+        service.from('staff').select('shop_id,pages').eq('user_id', userId),
+        service.from('owners').select('user_id').eq('user_id', userId).maybeSingle(),
       ]);
       if (membership.error || platformOwner.error) return reply(500, { error: 'Could not verify the shop administrator' });
-      if (!membership.data || platformOwner.data) return reply(403, { error: 'This account cannot be edited from this shop' });
-      const { data: current, error: lookupError } = await service.auth.admin.getUserById(administratorId);
-      if (lookupError || !current.user) return reply(500, { error: 'Could not load the shop administrator login' });
-      const usernameChanged = current.user.email?.toLowerCase() !== email;
-      if (!usernameChanged && !password) return reply(200, { id: administratorId });
-      const { error } = await service.auth.admin.updateUserById(administratorId, {
-        ...(usernameChanged ? { email, email_confirm: true } : {}),
+      const target = membership.data.find(row => row.shop_id === shop);
+      if (!target || target.pages.includes('admin') !== editingAdmin || platformOwner.data ||
+          (!editingAdmin && membership.data.length !== 1)) {
+        return reply(403, { error: 'This account cannot be edited from this shop' });
+      }
+      const { data: current, error: lookupError } = await service.auth.admin.getUserById(userId);
+      if (lookupError || !current.user) return reply(500, { error: 'Could not load the account login' });
+      const newEmail = email && current.user.email?.toLowerCase() !== email ? email : null;
+      if (!newEmail && !password) return reply(200, { id: userId });
+      const { error } = await service.auth.admin.updateUserById(userId, {
+        ...(newEmail ? { email: newEmail, email_confirm: true } : {}),
         ...(password ? { password } : {}),
       });
       if (error?.code === 'email_exists' || error?.code === 'user_already_exists') {
         return reply(409, { error: 'This username is already in use. Choose a unique username.' });
       }
       if (error) return reply(400, { error: error.message });
-      return reply(200, { id: administratorId });
+      return reply(200, { id: userId });
     }
     const creatingShop = shopName !== undefined;
     const name = typeof shopName === 'string' ? shopName.trim() : '';

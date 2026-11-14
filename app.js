@@ -9,13 +9,11 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 
 const root = document.querySelector('#app');
+const loginBrandKey = 'pledgepilot.login-brand';
 const { VITE_SUPABASE_URL: url, VITE_SUPABASE_ANON_KEY: key } = import.meta.env;
 const db = url && key ? createClient(url, key) : null;
-const labels = {customers:'Customers',loans:'Pledge loan',release:'Release',reports:'Reports',accounting:'Accounting',audit:'Release audit',admin:'Staff & access'};
+const labels = {customers:'Customers',loans:'Pledge loan',release:'Release',reports:'Reports',accounting:'Ledgers & groups',journal:'Journal entries',balances:'Ledger balances',audit:'Release audit',admin:'Staff & access'};
 const permissions = Object.keys(labels).filter(page => page !== 'admin');
-// Extra pages that are unlocked by an existing permission (no new staff permission needed).
-const subPages = {accounting:['journal','balances']};
-const subPageLabels = {accounting:'Ledgers & groups',journal:'Journal entries',balances:'Ledger balances'};
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field = (name, label, attributes = 'required') => '<label>'+label+'<input name="'+name+'" '+attributes+'></label>';
 const usernameField = label => field('username',label,'required pattern="'+usernamePattern+'" autocomplete="username" autocapitalize="none" spellcheck="false" title="3 to 32 letters, digits, underscores or hyphens"');
@@ -349,7 +347,7 @@ const pageUrl = page => new URL(page === 'login' ? './index.html' : './'+page+'.
 const navigate = page => location.replace(pageUrl(page));
 const shopKey = 'pawn-active-shop';
 const selectShop=id=>{sessionStorage.setItem(shopKey,id);location.reload();};
-const labelsByPage = {...labels, ...subPageLabels, login:'Sign in', owner:'Platform owner', unassigned:'Shop access'};
+const labelsByPage = {...labels, login:'Sign in', owner:'Platform owner', unassigned:'Shop access'};
 
 async function mount(page, screen) {
   if(!db) {root.textContent='Set the Supabase URL and public key to connect the ledger.'; return;}
@@ -372,14 +370,20 @@ async function mount(page, screen) {
       }
       shop=shops.find(s=>s.id===selectedId)?.id || shops[0]?.id;
       const allowed=memberships.find(m=>m.shop_id===shop && !shops.find(s=>s.id===shop)?.paused)?.pages || [];
-      permitted=[...(owner?['owner']:[]),...Object.keys(labels).filter(p=>allowed.includes('admin')||allowed.includes(p))
-        .flatMap(p=>[p,...(subPages[p]||[])])];
+      permitted=[...(owner?['owner']:[]),...Object.keys(labels).filter(p=>allowed.includes('admin')||allowed.includes(p))];
       if(page==='login'||(permitted.length?!permitted.includes(page):page!=='unassigned')) {
         return navigate(permitted[0]||'unassigned');
       }
     }
     const activeShop=session?shops.find(item=>item.id===shop):undefined;
     const branding=activeShop?await result(db.from('shops').select('logo').eq('id',activeShop.id).maybeSingle()):null;
+    let rememberedBrand;
+    try {
+      if(activeShop) localStorage.setItem(loginBrandKey,JSON.stringify({name:activeShop.name,logo:branding?.logo}));
+      if(page==='login') rememberedBrand=JSON.parse(localStorage.getItem(loginBrandKey));
+    } catch {
+      // Sign-in remains available when browser storage is disabled.
+    }
     const brandName=activeShop?.name || 'PledgePilot';
     const brandMark=branding?.logo
       ? '<img class="brand-mark brand-logo" src="'+escape(branding.logo)+'" alt="">'
@@ -397,6 +401,14 @@ async function mount(page, screen) {
         '<button type="button" data-scroll="1" aria-label="Scroll menu right">›</button></div>':'');
     const logo=root.querySelector('.brand-logo');
     if(logo) enableImageViewer(logo);
+    if(page==='login'){
+      const signInLogo=document.createElement('img');
+      signInLogo.className='login-shop-logo';
+      const hasShopLogo=typeof rememberedBrand?.logo==='string' && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(rememberedBrand.logo);
+      signInLogo.src=hasShopLogo?rememberedBrand.logo:'./pledgepilot-192.png';
+      signInLogo.alt=hasShopLogo?String(rememberedBrand.name || 'Shop logo'):'PledgePilot';
+      root.querySelector('main').prepend(signInLogo);
+    }
     if(links){
       const menu=root.querySelector('.top-menu');
       menu.addEventListener('keydown',event=>{

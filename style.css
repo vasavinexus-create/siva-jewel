@@ -163,9 +163,10 @@ img { max-width: min(100%, 16rem); max-height: 15rem; border-radius: .65rem; obj
 .auth-layout main { max-width: 29rem; margin-block: auto; padding-block: 2rem max(2rem, env(safe-area-inset-bottom)); }
 .auth-layout form { grid-template-columns: minmax(0,1fr); gap: 1rem; padding: clamp(1rem, 5vw, 1.65rem); }
 .auth-layout form button { margin-top: .2rem; }
-.login-provider { margin-top: 1.25rem; text-align: center; color: #36483e; }
+.login-shop-logo { display: block; width: min(100%, 8rem); height: auto; max-height: 7rem; margin: 0 auto 1rem; }
+.login-provider { padding: 0 1rem max(1rem, env(safe-area-inset-bottom)); text-align: center; color: #36483e; }
 .login-provider p { margin: 0 0 .55rem; font-size: .875rem; font-weight: 650; }
-.login-provider img { display: block; width: min(100%, 15rem); height: auto; margin-inline: auto; border-radius: .65rem; }
+.login-provider img { display: block; width: min(100%, 7.5rem); height: auto; margin-inline: auto; border-radius: .65rem; }
 
 @media (max-width: 760px) {
   .bottom-nav a { font-size: .75rem; }

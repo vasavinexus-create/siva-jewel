@@ -1,5 +1,6 @@
 import { dateField, mount,db,shop,result,money,run,customerPreview,customerPreviewFields,loanPreview,field,photo,today,form,upload,lookupField,searchCustomers,searchLookup,submitFinancial } from '../app.js';
 import { paymentFields,loadBankLedgers } from '../accounting.js';
+import { setupPledgeEdit } from './pledge-edit.js';
 
 mount('loans',async()=>{
     const main=document.querySelector('main');
@@ -7,9 +8,11 @@ mount('loans',async()=>{
       <div class="owner-tabs" role="tablist" aria-label="Pledge loan">
         <button type="button" role="tab" id="pledge-tab" aria-controls="pledge-panel">New pledge</button>
         <button type="button" role="tab" id="top-up-tab" aria-controls="top-up-panel">Add loan amount</button>
+        <button type="button" role="tab" id="edit-tab" aria-controls="edit-panel">Edit</button>
       </div>
       <div id="pledge-panel" role="tabpanel" aria-labelledby="pledge-tab"></div>
-      <div id="top-up-panel" role="tabpanel" aria-labelledby="top-up-tab" hidden></div>`);
+      <div id="top-up-panel" role="tabpanel" aria-labelledby="top-up-tab" hidden></div>
+      <div id="edit-panel" role="tabpanel" aria-labelledby="edit-tab" hidden></div>`);
     const tabs=[...main.querySelectorAll('[role=tab]')];
     const panels=tabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls')));
     const activate=index=>{
@@ -22,7 +25,7 @@ mount('loans',async()=>{
     tabs.forEach((tab,i)=>{
       tab.onclick=()=>activate(i);
       tab.onkeydown=event=>{
-        const next={ArrowLeft:1-i,ArrowRight:1-i,Home:0,End:1}[event.key];
+        const next={ArrowLeft:(i+tabs.length-1)%tabs.length,ArrowRight:(i+1)%tabs.length,Home:0,End:tabs.length-1}[event.key];
         if(next===undefined) return;
         event.preventDefault();
         activate(next);
@@ -96,5 +99,5 @@ mount('loans',async()=>{
       }):null);
     };
     searchCustomers(editor,'customer_id');
-    await Promise.all([loadBankLedgers(editor),loadBankLedgers(topUp)]);
+    await Promise.all([loadBankLedgers(editor),loadBankLedgers(topUp),setupPledgeEdit(panels[2])]);
 });
