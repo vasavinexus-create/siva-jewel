@@ -287,7 +287,7 @@ const searchCustomers=(editor,name)=>searchLookup(editor,name,
 
 const pageSize=50;
 
-function fetchCursor(query, columns, cursor) {
+function fetchCursor(query, columns, cursor, size=pageSize) {
   for(const [name,ascending] of columns) query.order(name,{ascending});
   if(cursor){
     const literal=value=>'"'+String(value).replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
@@ -299,7 +299,7 @@ function fetchCursor(query, columns, cursor) {
     const [name,ascending]=columns[0];
     query[ascending?'gte':'lte'](name,cursor[name]).or(predicates.join(','));
   }
-  return result(query.limit(pageSize+1));
+  return result(query.limit(size+1));
 }
 
 function cursorList(container, fetchPage, renderItems) {

@@ -3,15 +3,20 @@ import { paymentFields,loadBankLedgers } from '../accounting.js';
 
 import { mountPartialPayment } from './partial-payment.js';
 
+import { mountReleaseEdit } from './release-edit.js';
+
 mount('release', async () => {
   const main=document.querySelector('main');
+  const canEdit=await result(db.rpc('can_access',{s:shop,p:'release_edit'}));
   main.insertAdjacentHTML('beforeend',`
     <div class="owner-tabs" role="tablist" aria-label="Release">
       <button type="button" role="tab" id="release-tab" aria-controls="release-panel">Release</button>
       <button type="button" role="tab" id="partial-payment-tab" aria-controls="partial-payment-panel">Partial Payment</button>
+      ${canEdit?'<button type="button" role="tab" id="release-edit-tab" aria-controls="release-edit-panel">Edit</button>':''}
     </div>
     <div id="release-panel" role="tabpanel" aria-labelledby="release-tab"></div>
-    <div id="partial-payment-panel" role="tabpanel" aria-labelledby="partial-payment-tab" hidden></div>`);
+    <div id="partial-payment-panel" role="tabpanel" aria-labelledby="partial-payment-tab" hidden></div>
+    ${canEdit?'<div id="release-edit-panel" role="tabpanel" aria-labelledby="release-edit-tab" hidden></div>':''}`);
   const tabs=[...main.querySelectorAll('[role=tab]')];
   const panels=tabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls')));
   const activate=index=>{
@@ -24,7 +29,7 @@ mount('release', async () => {
   tabs.forEach((tab,i)=>{
     tab.onclick=()=>activate(i);
     tab.onkeydown=event=>{
-      const next={ArrowLeft:1-i,ArrowRight:1-i,Home:0,End:1}[event.key];
+      const next={ArrowLeft:(i+tabs.length-1)%tabs.length,ArrowRight:(i+1)%tabs.length,Home:0,End:tabs.length-1}[event.key];
       if(next===undefined) return;
       event.preventDefault();
       activate(next);
@@ -32,6 +37,7 @@ mount('release', async () => {
     };
   });
   activate(0);
+  if(canEdit) mountReleaseEdit(panels[2]);
   let version=0;
   let timer;
   let currentQuote;

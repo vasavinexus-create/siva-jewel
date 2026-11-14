@@ -43,3 +43,7 @@ Interest uses simple monthly interest. A partial calendar month rounds up, same-
 Supabase filters customer and open-loan searches, customer history, pending release reviews, and date-based reports. Release quotes and accounting totals are calculated in the database. Transaction tables load 50 rows at a time.
 
 The accounting screens use INR and a fixed chart of accounts. Pledges and releases generate ledger entries. Post opening capital and balances, other income and expenses through Accounting. Profit and loss uses realized interest. Balance sheet and trial balance are cumulative through the report date.
+
+Photo cleanup runs hourly. Set the Vault secret `siva_jewel_photo_cleanup_url`
+in each Supabase project to its HTTPS `/functions/v1/expire-jewel-photos`
+endpoint. The scheduler sends no request until this secret is configured.

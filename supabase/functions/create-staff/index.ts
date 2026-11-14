@@ -8,7 +8,7 @@ const headers = {
   'Content-Type': 'application/json',
 };
 const reply = (status: number, body: object) => new Response(JSON.stringify(body), { status, headers });
-const allowedPages = ['shop', 'customers', 'customer_edit', 'loans', 'release', 'reports', 'accounting', 'journal', 'balances', 'audit', 'pledge_edit_all', 'pledge_edit_details'];
+const allowedPages = ['shop', 'customers', 'customer_edit', 'loans', 'release', 'release_edit', 'reports', 'accounting', 'journal', 'balances', 'audit', 'pledge_edit_all', 'pledge_edit_details'];
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { headers });

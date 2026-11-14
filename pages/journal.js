@@ -1,11 +1,11 @@
 import { dateField, mount,db,shop,field,option,money,today,form,section,paginated,fetchCursor,submitFinancial,result } from '../app.js';
-import { accounts } from '../accounting.js';
+import { accounts,loadLedgerOptions } from '../accounting.js';
 
 // Page 2: Post journal entry + recent journal entries
 mount('journal',async()=>{
-  const ledgers=await result(db.from('ledgers').select('id,name,ledger_groups(name)').eq('shop_id',shop).order('name').order('id'));
+  const ledgers=await loadLedgerOptions(()=>db.from('ledgers').select('id,name,ledger_groups(name)').eq('shop_id',shop));
   const options=option('','Select account')+accounts.map(account=>option(account,account)).join('')+
-    ledgers.map(ledger=>option(ledger.id,ledger.name+' · '+ledger.ledger_groups?.name)).join('');
+    ledgers.map(ledger=>option(ledger.id,ledger.name+' Â· '+ledger.ledger_groups?.name)).join('');
   form(dateField('entry_date','Posting date')+
     field('description','Description')+'<label>Debit<select name="debit" required>'+options+'</select></label>'+
     '<label>Credit<select name="credit" required>'+options+'</select></label>'+

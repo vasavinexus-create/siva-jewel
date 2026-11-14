@@ -1,11 +1,11 @@
 import { mount,db,shop,field,option,form,section,result,table } from '../app.js';
-import { ledgerCategories } from '../accounting.js';
+import { ledgerCategories,loadLedgerOptions } from '../accounting.js';
 
 // Page 1: Ledger & group creation
 mount('accounting',async()=>{
   const [groups,ledgers]=await Promise.all([
-    result(db.from('ledger_groups').select('id,name,category').eq('shop_id',shop).order('name').order('id')),
-    result(db.from('ledgers').select('id,name,ledger_groups(name,category)').eq('shop_id',shop).order('name').order('id')),
+    loadLedgerOptions(()=>db.from('ledger_groups').select('id,name,category').eq('shop_id',shop)),
+    loadLedgerOptions(()=>db.from('ledgers').select('id,name,ledger_groups(name,category)').eq('shop_id',shop)),
   ]);
   form(field('name','Group name','maxlength="100" required')+
     '<label>Account category<select name="category" required>'+option('','Select category')+

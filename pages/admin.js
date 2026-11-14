@@ -1,4 +1,4 @@
-import { mount,db,shop,labels,permissions,escape,field,usernameField,form,result,section,run,lookupField,searchLookup } from '../app.js';
+import { dateField,mount,db,shop,labels,permissions,escape,field,usernameField,form,result,section,run,lookupField,searchLookup } from '../app.js';
 import { loginDomain } from '../supabase/functions/_shared/login.js';
 
 mount('admin',async()=>{
@@ -7,9 +7,12 @@ mount('admin',async()=>{
       '<label>Pledge loan editing<select name="pledge_edit"><option value="">View only</option>'+
       Object.entries(editModes).map(([key,label])=>'<option value="'+key+'" '+(selected.includes(key)?'selected':'')+'>'+label+'</option>').join('')+
       '</select></label><label><span><input type="checkbox" name="customer_edit" '+
-      (selected.includes('customer_edit')?'checked':'')+'> Can edit customers</span></label>';
+      (selected.includes('customer_edit')?'checked':'')+'> Can edit customers</span></label>'+
+      '<label><span><input type="checkbox" name="release_edit" '+
+      (selected.includes('release_edit')?'checked':'')+'> Can edit releases</span></label>';
     const selected = data => ['shop', ...permissions.filter(p=>data[p]),
       ...(data.loans && Object.hasOwn(editModes,data.pledge_edit)?[data.pledge_edit]:[]),
+      ...(data.release && data.release_edit?['release_edit']:[]),
       ...(data.customers && data.customer_edit?['customer_edit']:[])];
     async function saveLogin(body) {
       const {error}=await db.functions.invoke('create-staff',{body:{shop,...body}});
@@ -45,6 +48,16 @@ mount('admin',async()=>{
     });
     form(usernameField('Staff username')+field('password','Temporary password','type="password" minlength="6" required autocomplete="new-password"')+checks([]),
       'Create staff',data=>saveLogin({username:data.username,password:data.password,pages:selected(data)}),true,document.querySelector('#new-staff'));
+
+    const settings=document.createElement('section');
+    document.querySelector('main').append(settings);
+    const current=await result(db.from('shops').select('accounting_closed_through').eq('id',shop).single());
+    settings.innerHTML='<h2>Release accounting period</h2><p>Releases dated on or before the closing date are locked. Clear the date to reopen all release periods.</p>';
+    form(dateField('closed_through','Closed through',current.accounting_closed_through??'',false),
+      'Save closing date',async ({closed_through})=>{
+        await result(db.rpc('set_release_closed_through',{s:shop,closed_through:closed_through||null}));
+        document.querySelector('#message').textContent='Release closing date saved.';
+      },false,settings);
 
     const picker=document.querySelector('#staff-picker');
     const staffId=picker.elements.staff_id;
